@@ -1,0 +1,29 @@
+---
+myapp:
+  val: ooh
+spring:
+  config:
+    activate:
+      on-profile: default,dev
+  cloud:
+    bus:
+      enabled: false
+    discovery:
+      enabled: false
+    consul:
+      enabled: false
+      config:
+        enabled: false
+---
+spring:
+  config:
+    import: "consul:consul.ps.internal:8500"
+    activate:
+      on-profile: test
+  application:
+    name: k-producer
+  cloud:
+    consul:
+      host: consul.ps.internal
+      port: 8500
+      scheme: http
