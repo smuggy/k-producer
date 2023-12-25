@@ -10,9 +10,9 @@ import java.time.format.DateTimeFormatter;
 public class Temperature {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    private TempScale scale;
-    private LocalDateTime time;
-    private double temp;
+    private final TempScale scale;
+    private final LocalDateTime time;
+    private final double temp;
 
 
     public static Temperature createCelsiusTemp(double temp) {
