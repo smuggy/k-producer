@@ -1,5 +1,11 @@
 package net.podspace.producer;
 
+import net.podspace.management.MBeanContainer;
+import net.podspace.management.ManagementAgent;
+import net.podspace.management.ManagementAgentImpl;
+import net.podspace.producer.generator.Generator;
+import net.podspace.producer.generator.GeneratorManager;
+import net.podspace.producer.generator.TemperatureProducer;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -11,6 +17,7 @@ import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 
+import javax.management.NotCompliantMBeanException;
 import java.util.logging.Logger;
 import java.util.Map;
 import java.util.HashMap;
@@ -57,5 +64,26 @@ public class AppConfig {
     @Bean
     public KafkaTemplate<String, String> kafkaTemplate() {
         return new KafkaTemplate<>(producerFactory());
+    }
+
+    @Bean
+    public Generator generator() {
+        var producer = new TemperatureProducer();
+        var generator = new Generator(producer);
+        generator.setSeconds(5);
+        generator.setTopicName("test-topic-one");
+        generator.setKafkaTemplate(kafkaTemplate());
+        return generator;
+    }
+
+    @Bean
+    public ManagementAgent managementAgent() {
+        var agent = new ManagementAgentImpl();
+        try {
+            MBeanContainer mbc = new MBeanContainer(generator(), GeneratorManager.class);
+            mbc.setName("name=generatorManager");
+            agent.addBean(mbc);
+        } catch (NotCompliantMBeanException ignored) {}
+        return agent;
     }
 }

@@ -2,6 +2,8 @@
 myapp:
   val: ooh
 spring:
+  jmx:
+    enabled: true
   config:
     activate:
       on-profile: default,dev
