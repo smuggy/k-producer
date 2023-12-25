@@ -1,8 +1,8 @@
 package net.podspace.producer;
 
+import net.podspace.producer.domain.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,10 +14,10 @@ import java.util.concurrent.CompletableFuture;
 public class HelloController {
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
     private final MyBean b;
-    private final String topicName = "test-topic-one";
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private static final String topicName = "test-topic-one";
+    private final KafkaTemplate<String, User> kafkaTemplate;
 
-    public HelloController(MyBean b, KafkaTemplate<String,String> kafkaTemplate) {
+    public HelloController(MyBean b, KafkaTemplate<String,User> kafkaTemplate) {
         this.b = b;
         this.kafkaTemplate = kafkaTemplate;
     }
@@ -34,7 +34,8 @@ public class HelloController {
     }
 
     public void sendMessage(String message) {
-        CompletableFuture<SendResult<String, String>> future = kafkaTemplate.send(topicName, message);
+        User user = new User(1, "abc",123, "blue");
+        CompletableFuture<SendResult<String, User>> future = kafkaTemplate.send(topicName, user);
         future.whenComplete((result, ex) -> {
             if (ex == null) {
                 logger.info("Sent message=[" + message +
@@ -45,4 +46,14 @@ public class HelloController {
             }
         });
     }
+
+    public void receive() {
+        kafkaTemplate.receive(topicName, 0, 0);
+    }
+
+//    @KafkaListener(topics = "${kafka.topic.avro}")
+//    public void receive(User user) {
+//        LOGGER.info("received user='{}'", user.toString());
+//        latch.countDown();
+//    }
 }
