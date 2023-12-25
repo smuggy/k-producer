@@ -41,16 +41,11 @@ public class Temperature {
     }
 
     public String toJsonString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("{");
-        sb.append("\"temp\":");
-        sb.append(temp);
-        sb.append("\"time\":\"");
-        sb.append(time.format(formatter));
-        sb.append("\",\"scale\":\"");
-        sb.append(scale.getScale());
-        sb.append("\"}");
-        return sb.toString();
+        return "{" +
+                "\"temp\":" + temp +
+                ",\"time\":\"" +
+                time.format(formatter) +
+                "\",\"scale\":\"" +
+                scale.getScale() + "\"}";
     }
-
 }
