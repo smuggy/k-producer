@@ -1,6 +1,5 @@
 package net.podspace.producer.generator;
 
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -15,13 +14,16 @@ public class Generator implements Runnable, GeneratorManager {
     private static final Logger logger = LoggerFactory.getLogger(Generator.class);
     private long seconds;
     private boolean pause;
+    private boolean started;
     private boolean quit;
     private final MessageProducer producer;
     private String topicName;
     private KafkaTemplate<String, String> kafkaTemplate;
+    private ExecutorService pool;
 
     public Generator(MessageProducer producer) {
         this.producer = producer;
+        this.started = false;
     }
 
     public void resume() {
@@ -31,7 +33,10 @@ public class Generator implements Runnable, GeneratorManager {
         pause = true;
     }
     public void quit() {
+        logger.info("In quit method...");
         quit = true;
+        teardown();
+        logger.info("torn down...");
     }
     public void setTopicName(String topicName) {
         this.topicName = topicName;
@@ -44,23 +49,46 @@ public class Generator implements Runnable, GeneratorManager {
     }
 
     public void initiate() {
+        if (started) {
+            logger.info("already started... leaving");
+            return;
+        }
+
+        started = true;
+        quit = false;
+        pause = false;
+        logger.info("starting thread pool");
+        pool = Executors.newFixedThreadPool(1);
+        pool.submit(this);
+    }
+
+    public void teardown() {
         try {
-            ExecutorService pool = Executors.newFixedThreadPool(1);
-            pool.submit(this);
+            if (! started) {
+                logger.info("teardown: not started, leaving");
+            }
+            logger.info("shutting down");
             pool.shutdown();
             pool.close();
             while (!pool.awaitTermination(5L, TimeUnit.MINUTES)) {
                 logger.info("Not yet. Still waiting for termination");
             }
+
+            quit = false;
+            started = false;
+            pause = false;
         } catch(InterruptedException ignored) {}
     }
 
     @Override
     public void run() {
+        logger.info("In run method, starting stream...");
         sendMessageStream();
+        logger.info("In run method, streaming done...");
     }
 
     public void sendMessageStream() {
+        logger.info("In stream method...");
         while (!quit) {
             if (pause) {
                 try {
