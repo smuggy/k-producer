@@ -86,5 +86,4 @@ public class Generator implements Runnable, GeneratorManager {
             } catch (InterruptedException ignored) {}
         }
     }
-
 }

@@ -15,7 +15,6 @@ public class ManagementAgentImpl implements ManagementAgent {
     private final MBeanServer mbeanServer;
 
     public ManagementAgentImpl() {
-        //JMXService.initiate();
         mbeanServer = ManagementFactory.getPlatformMBeanServer();
     }
 
