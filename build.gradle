@@ -1,10 +1,12 @@
 plugins {
     id 'java'
     id 'application'
+    id 'org.springframework.boot' version '2.7.16'
+    id 'io.spring.dependency-management' version '1.1.0'
 }
 
 group = 'net.podspace'
-version = '1.0-SNAPSHOT'
+version = '0.1.1'
 
 repositories {
     mavenCentral()
@@ -13,6 +15,44 @@ repositories {
 application {
     mainClass = "net.podspace.producer.Main"
 }
+
+tasks.register("copyTarToDockerDir", Copy) {
+    from layout.buildDirectory.dir("distributions")
+    include "**/*.tar"
+    into layout.buildDirectory.dir("docker")
+}
+
+tasks.register("prepareDockerDir", Copy) {
+    from layout.projectDirectory.dir("src/main/docker")
+    include "**/*"
+    filter { it.replaceAll('__app_version__', project.version) }
+    into layout.buildDirectory.dir("docker")
+}
+
+tasks.register("buildDockerImage", Exec) {
+    workingDir layout.getBuildDirectory()
+    commandLine "docker", "build", "--tag", "${project.name}:${project.version}", "docker"
+}
+
+tasks.register("pushDockerImage", Exec) {
+    commandLine "docker", "push", "${project.name}:${project.version}"
+}
+
+//tasks.register("buildConfigDockerImage", Exec) {
+//    workingDir "$projectDir/config"
+//    commandLine "docker", "build", "--tag", "${project.name}-config:${project.version}", "."
+//}
+
+//tasks.register("pushConfigDockerImage", Exec) {
+//    commandLine "docker", "push", "${project.name}-config:${project.version}"
+//}
+
+copyTarToDockerDir.dependsOn build
+buildDockerImage.dependsOn prepareDockerDir
+buildDockerImage.dependsOn copyTarToDockerDir
+//pushDockerImage.dependsOn buildConfigDockerImage
+//pushDockerImage.dependsOn pushConfigDockerImage
+pushDockerImage.dependsOn buildDockerImage
 
 dependencies {
     implementation 'org.slf4j:slf4j-api:1.7.36'

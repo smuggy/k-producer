@@ -26,10 +26,15 @@ import java.util.HashMap;
 @Configuration
 public class AppConfig {
     private static final Logger logger = Logger.getLogger(AppConfig.class.getName());
-    private static final String BOOTSTRAP_ADDRESS = "192.168.1.60:9092";
+//    private static final String BOOTSTRAP_ADDRESS = "192.168.1.60:9092";
 
     @Value("${myapp.val}")
     private String val;
+    @Value("${myapp.kafka.topicName}")
+    private String topicName;//="test-topic-one";
+    @Value("${myapp.kafka.bootstrapAddress}")
+    private String bootstrapAddress;//="192.168.1.60:9092";
+
     private Generator generator;
 
     @Bean
@@ -44,7 +49,7 @@ public class AppConfig {
     @Bean
     public KafkaAdmin kafkaAdmin() {
         Map<String, Object> configs = new HashMap<>();
-        configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_ADDRESS);
+        configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapAddress);
         return new KafkaAdmin(configs);
     }
 
@@ -53,7 +58,7 @@ public class AppConfig {
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(
                 ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
-                BOOTSTRAP_ADDRESS);
+                bootstrapAddress);
         configProps.put(
                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                 StringSerializer.class);
@@ -75,7 +80,7 @@ public class AppConfig {
             var producer = new TemperatureProducer();
             generator = new Generator(producer);
             generator.setSeconds(5);
-            generator.setTopicName("test-topic-one");
+            generator.setTopicName(topicName);
             generator.setKafkaTemplate(kafkaTemplate());
         }
         return generator;

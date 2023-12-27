@@ -44,6 +44,9 @@ public class Generator implements Runnable, GeneratorManager {
     public void setSeconds(long seconds) {
         this.seconds = seconds;
     }
+    public long getSeconds() {
+        return this.seconds;
+    }
     public void setKafkaTemplate(KafkaTemplate<String, String> kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;
     }
@@ -67,7 +70,7 @@ public class Generator implements Runnable, GeneratorManager {
             if (! started) {
                 logger.info("teardown: not started, leaving");
             }
-            logger.info("shutting down");
+            logger.info("teardown: shutting down");
             pool.shutdown();
             pool.close();
             while (!pool.awaitTermination(5L, TimeUnit.MINUTES)) {
@@ -78,6 +81,7 @@ public class Generator implements Runnable, GeneratorManager {
             started = false;
             pause = false;
         } catch(InterruptedException ignored) {}
+        logger.info("teardown: generator thread shut down.");
     }
 
     @Override
@@ -91,6 +95,7 @@ public class Generator implements Runnable, GeneratorManager {
         logger.info("In stream method...");
         while (!quit) {
             if (pause) {
+                logger.info("streaming paused...");
                 try {
                     Thread.sleep(10000);
                 } catch (InterruptedException ignored) {}

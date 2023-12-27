@@ -5,4 +5,5 @@ public interface GeneratorManager {
     void pause();
     void quit();
     void setSeconds(long seconds);
+    long getSeconds();
 }

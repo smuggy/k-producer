@@ -23,7 +23,7 @@ public class ManagementAgentImpl implements ManagementAgent {
         ObjectName objectName;
         logger.info("Adding management for: " + bean.objectName());
         try {
-            String name = "net.podspace.jmx:type=PSAgent," + bean.objectName();
+            String name = "net.podspace.jmx:type=KPAgent," + bean.objectName();
             objectName = new ObjectName(name);
             try {
                 mbeanServer.unregisterMBean(objectName);
@@ -41,7 +41,7 @@ public class ManagementAgentImpl implements ManagementAgent {
         ObjectName objectName;
         logger.debug("Removing management for " + bean.objectName());
         try {
-            objectName = new ObjectName("net.podspace.jmx:type=PSAgent," + bean.objectName());
+            objectName = new ObjectName("net.podspace.jmx:type=KPAgent," + bean.objectName());
             mbeanServer.unregisterMBean(objectName);
         } catch (Exception ie) {
             logger.info("Exception occurred in management agent impl:", ie);
