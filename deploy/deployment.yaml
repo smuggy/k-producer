@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k-producer
+  namespace: app-ns
+  labels:
+    app.kubernetes.io/name: k-producer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: k-producer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: k-producer
+    spec:
+      serviceAccountName: k-producer-sa
+      automountServiceAccountToken: true
+      containers:
+        - name: k-producer-ctr
+          image: mmckernan/k-producer:0.1.1
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              port: 8080
+              path: /actuator/health
+          readinessProbe:
+            httpGet:
+              port: 8080
+              path: /actuator/health
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: test

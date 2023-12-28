@@ -1,8 +1,7 @@
 plugins {
     id 'java'
     id 'application'
-    id 'org.springframework.boot' version '2.7.16'
-    id 'io.spring.dependency-management' version '1.1.0'
+    id 'org.springframework.boot' version '3.1.2'
 }
 
 group = 'net.podspace'
@@ -31,36 +30,22 @@ tasks.register("prepareDockerDir", Copy) {
 
 tasks.register("buildDockerImage", Exec) {
     workingDir layout.getBuildDirectory()
-    commandLine "docker", "build", "--tag", "${project.name}:${project.version}", "docker"
+    commandLine "docker", "build", "--build-arg", "APP_VERSION=${project.version}", "--tag", "${project.name}:${project.version}", "docker"
 }
 
 tasks.register("pushDockerImage", Exec) {
     commandLine "docker", "push", "${project.name}:${project.version}"
 }
 
-//tasks.register("buildConfigDockerImage", Exec) {
-//    workingDir "$projectDir/config"
-//    commandLine "docker", "build", "--tag", "${project.name}-config:${project.version}", "."
-//}
-
-//tasks.register("pushConfigDockerImage", Exec) {
-//    commandLine "docker", "push", "${project.name}-config:${project.version}"
-//}
-
 copyTarToDockerDir.dependsOn build
 buildDockerImage.dependsOn prepareDockerDir
 buildDockerImage.dependsOn copyTarToDockerDir
-//pushDockerImage.dependsOn buildConfigDockerImage
-//pushDockerImage.dependsOn pushConfigDockerImage
 pushDockerImage.dependsOn buildDockerImage
 
 dependencies {
     implementation 'org.slf4j:slf4j-api:1.7.36'
     implementation 'org.apache.logging.log4j:log4j-core:2.22.0'
     implementation 'org.apache.logging.log4j:log4j-layout-template-json:2.22.0'
-/*
-    implementation 'org.apache.logging.log4j:log4j-slf4j-impl:2.22.0'
-*/
 
     implementation 'org.springframework.boot:spring-boot-starter-web:3.2.1'
     implementation 'org.springframework.boot:spring-boot-starter-log4j2:3.2.1'

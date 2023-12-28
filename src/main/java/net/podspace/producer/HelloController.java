@@ -22,8 +22,19 @@ public class HelloController {
     }
 
     @GetMapping("/")
-    public String index() {
-        return "Greetings";
+    public String index()
+    {
+        String version;
+        try {
+            version = System.getenv("APP_VERSION");
+            if (version == null || version.isBlank()) {
+                version = "None";
+            }
+        } catch (SecurityException ignore) {
+            version = "None";
+        }
+
+        return "Greetings, application version is " + version;
     }
 
     @GetMapping("/other")
