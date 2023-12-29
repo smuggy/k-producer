@@ -38,3 +38,6 @@ spring:
         acl-token: anonymous
         enabled: true
         format: yaml
+      discovery:
+        health-check-interval: 15s
+        health-check-url: http://k-producer.ps.internal/actuator/health
