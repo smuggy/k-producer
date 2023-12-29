@@ -14,13 +14,13 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: k-producer
-        app.kubernetes.io/version: 0.1.1
+        app.kubernetes.io/version: 0.1.2
     spec:
       serviceAccountName: k-producer-sa
       automountServiceAccountToken: true
       containers:
         - name: k-producer-ctr
-          image: mmckernan/k-producer:0.1.1
+          image: mmckernan/k-producer:0.1.2
           ports:
             - containerPort: 8080
               name: http
