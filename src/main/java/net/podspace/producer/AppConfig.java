@@ -9,6 +9,8 @@ import net.podspace.producer.generator.TemperatureProducer;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,13 +21,12 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 
 import javax.management.NotCompliantMBeanException;
-import java.util.logging.Logger;
 import java.util.Map;
 import java.util.HashMap;
 
 @Configuration
 public class AppConfig {
-    private static final Logger logger = Logger.getLogger(AppConfig.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(AppConfig.class.getName());
 //    private static final String BOOTSTRAP_ADDRESS = "192.168.1.60:9092";
 
     @Value("${myapp.val}")
@@ -35,7 +36,7 @@ public class AppConfig {
     @Value("${myapp.kafka.bootstrapAddress}")
     private String bootstrapAddress;//="192.168.1.60:9092";
 
-    private Generator generator;
+    //private Generator generator;
 
     @Bean
     public MyBean beanInstance() {
@@ -56,6 +57,7 @@ public class AppConfig {
     @Bean
     public ProducerFactory<String, String> producerFactory() {
         Map<String, Object> configProps = new HashMap<>();
+        logger.debug("Producer factory: bootstrap server: " + bootstrapAddress);
         configProps.put(
                 ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 bootstrapAddress);
@@ -76,21 +78,19 @@ public class AppConfig {
     @Bean
     @Scope("prototype")
     public Generator generator() {
-        if (generator == null) {
-            var producer = new TemperatureProducer();
-            generator = new Generator(producer);
-            generator.setSeconds(5);
-            generator.setTopicName(topicName);
-            generator.setKafkaTemplate(kafkaTemplate());
-        }
+        var producer = new TemperatureProducer();
+        var generator = new Generator(producer);
+        generator.setSeconds(5);
+        generator.setTopicName(topicName);
+        generator.setKafkaTemplate(kafkaTemplate());
         return generator;
     }
 
     @Bean
-    public ManagementAgent managementAgent() {
+    public ManagementAgent managementAgent(Generator generator) {
         var agent = new ManagementAgentImpl();
         try {
-            MBeanContainer mbc = new MBeanContainer(generator(), GeneratorManager.class);
+            MBeanContainer mbc = new MBeanContainer(generator, GeneratorManager.class);
             mbc.setName("name=generatorManager");
             agent.addBean(mbc);
         } catch (NotCompliantMBeanException ignored) {}

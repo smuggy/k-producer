@@ -3,7 +3,7 @@ myapp:
   val: ooh
   kafka:
     topicName: test-topic-one
-    bootstrapAddress: 192.168.1.60:9092
+    bootstrapAddress: 192.168.0.60:9092
 spring:
   jmx:
     enabled: true

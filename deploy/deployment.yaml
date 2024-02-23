@@ -18,6 +18,8 @@ spec:
     spec:
       serviceAccountName: k-producer-sa
       automountServiceAccountToken: true
+      nodeSelector:
+        kubernetes.io/os: linux
       containers:
         - name: k-producer-ctr
           image: mmckernan/k-producer:0.1.2

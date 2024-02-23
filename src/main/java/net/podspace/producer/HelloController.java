@@ -13,7 +13,7 @@ import java.util.concurrent.CompletableFuture;
 public class HelloController {
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
     private final MyBean b;
-    private final String topicName = "test-topic-one";
+    private final static String TOPIC_NAME = "test-topic-one";
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     public HelloController(MyBean b, KafkaTemplate<String,String> kafkaTemplate) {
@@ -44,7 +44,7 @@ public class HelloController {
     }
 
     public void sendMessage(String message) {
-        CompletableFuture<SendResult<String, String>> future = kafkaTemplate.send(topicName, message);
+        CompletableFuture<SendResult<String, String>> future = kafkaTemplate.send(TOPIC_NAME, message);
         future.whenComplete((result, ex) -> {
             if (ex == null) {
                 logger.info("Sent message=[" + message +

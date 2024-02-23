@@ -70,6 +70,10 @@ public class Generator implements Runnable, GeneratorManager {
             if (! started) {
                 logger.info("teardown: not started, leaving");
             }
+            if (pool == null) {
+                logger.info("teardown: pool null");
+                return;
+            }
             logger.info("teardown: shutting down");
             pool.shutdown();
             pool.close();
