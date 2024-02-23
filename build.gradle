@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'application'
-    id 'org.springframework.boot' version '3.2.1'
+    id 'org.springframework.boot' version '3.2.2'
 }
 
 group = 'net.podspace'
@@ -47,9 +47,9 @@ dependencies {
     implementation 'org.apache.logging.log4j:log4j-core:2.22.0'
     implementation 'org.apache.logging.log4j:log4j-layout-template-json:2.22.0'
 
-    implementation 'org.springframework.boot:spring-boot-starter-web:3.2.1'
-    implementation 'org.springframework.boot:spring-boot-starter-log4j2:3.2.1'
-    implementation 'org.springframework.boot:spring-boot-starter-actuator:3.2.1'
+    implementation 'org.springframework.boot:spring-boot-starter-web:3.2.2'
+    implementation 'org.springframework.boot:spring-boot-starter-log4j2:3.2.2'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator:3.2.2'
     implementation 'org.springframework.cloud:spring-cloud-starter-consul-all:4.1.0'
 
     implementation 'org.springframework.kafka:spring-kafka:3.1.1'
