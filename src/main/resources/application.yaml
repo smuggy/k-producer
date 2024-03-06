@@ -3,7 +3,8 @@ myapp:
   val: ooh
   kafka:
     topicName: test-topic-one
-    bootstrapAddress: 192.168.0.60:9092
+    bootstrapAddress: kafka-00:9092,kafka-01:9092,kafka-02:9092
+#    bootstrapAddress: 192.168.0.60:9092
 spring:
   jmx:
     enabled: true
@@ -41,3 +42,25 @@ spring:
       discovery:
         health-check-interval: 15s
         health-check-url: http://k-producer.ps.internal/actuator/health
+---
+spring:
+  jmx:
+    enabled: true
+  config:
+    import: "consul:localhost:8500"
+    activate:
+      on-profile: test
+  application:
+    name: k-producer
+  cloud:
+    consul:
+      host: localhost
+      port: 8500
+      scheme: http
+      config:
+        acl-token: anonymous
+        enabled: true
+        format: yaml
+      discovery:
+        health-check-interval: 15s
+        health-check-url: http://app.podspace.internal:8080/actuator/health
