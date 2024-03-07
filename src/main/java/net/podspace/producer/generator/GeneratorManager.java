@@ -6,4 +6,6 @@ public interface GeneratorManager {
     void quit();
     void setSeconds(long seconds);
     long getSeconds();
+    void setMessages(long count);
+    long getMessages();
 }

@@ -62,4 +62,60 @@ public class GeneratorController {
         logger.info("Woot... resumed.");
         return "Success... resumed";
     }
+    @GetMapping("/lowersleep")
+    public String lowerSleep() {
+        try {
+            logger.info("Calling generator quit.");
+            var seconds = generator.getSeconds();
+            if (seconds > 1)
+                generator.setSeconds(seconds - 1);
+            else
+                generator.setSeconds(1);
+        } catch (Throwable t) {
+            logger.warn("Error occurred.", t);
+            return "Failure... I dunno";
+        }
+        logger.info("Woot... lowered to " + generator.getSeconds() + " seconds.");
+        return "Success... lowered time";
+    }
+    @GetMapping("/raisesleep")
+    public String raiseSleep() {
+        try {
+            logger.info("Calling generator quit.");
+            var seconds = generator.getSeconds();
+            generator.setSeconds(seconds + 1);
+        } catch (Throwable t) {
+            logger.warn("Error occurred.", t);
+            return "Failure... I dunno";
+        }
+        logger.info("Woot... raised to " + generator.getSeconds() + " seconds.");
+        return "Success... raised time";
+    }
+    @GetMapping("/lowermessages")
+    public String lowerMessages() {
+        try {
+            logger.info("Calling generator quit.");
+            var messages = generator.getMessages();
+            if (messages <= 5) generator.setMessages(1);
+            else generator.setMessages(messages - 5);
+        } catch (Throwable t) {
+            logger.warn("Error occurred.", t);
+            return "Failure... I dunno";
+        }
+        logger.info("Woot... lowered to " + generator.getMessages() + " messages.");
+        return "Success... lowered messages";
+    }
+    @GetMapping("/raisemessages")
+    public String raiseMessages() {
+        try {
+            logger.info("Calling generator quit.");
+            var messages = generator.getMessages();
+            generator.setMessages(messages + 5);
+        } catch (Throwable t) {
+            logger.warn("Error occurred.", t);
+            return "Failure... I dunno";
+        }
+        logger.info("Woot... raised to " + generator.getMessages() + " messages.");
+        return "Success... raised messages";
+    }
 }

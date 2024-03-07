@@ -16,6 +16,7 @@ public class Generator implements Runnable, GeneratorManager {
     private boolean pause;
     private boolean started;
     private boolean quit;
+    private long messages;
     private final MessageProducer producer;
     private String topicName;
     private KafkaTemplate<String, String> kafkaTemplate;
@@ -23,6 +24,8 @@ public class Generator implements Runnable, GeneratorManager {
 
     public Generator(MessageProducer producer) {
         this.producer = producer;
+        this.messages = 1;
+        this.seconds = 5;
         this.started = false;
     }
 
@@ -42,10 +45,18 @@ public class Generator implements Runnable, GeneratorManager {
         this.topicName = topicName;
     }
     public void setSeconds(long seconds) {
-        this.seconds = seconds;
+        if (this.seconds < 0) this.seconds = 5;
+        else this.seconds = seconds;
     }
     public long getSeconds() {
         return this.seconds;
+    }
+    public void setMessages(long count) {
+        if (count < 1) this.messages = 1;
+        else this.messages = count;
+    }
+    public long getMessages() {
+        return messages;
     }
     public void setKafkaTemplate(KafkaTemplate<String, String> kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;
@@ -106,18 +117,19 @@ public class Generator implements Runnable, GeneratorManager {
                 continue;
             }
 
-            String message = producer.createMessage();
-            CompletableFuture<SendResult<String, String>> future = kafkaTemplate.send(topicName, message);
-            future.whenComplete((result, ex) -> {
-                if (ex == null) {
-                    logger.info("Sent message=[" + message +
-                            "] with offset=[" + result.getRecordMetadata().offset() + "]");
-                } else {
-                    logger.info("Unable to send message=[" +
-                            message + "] due to : " + ex.getMessage());
-                }
-            });
-
+            for (long i=0; i<this.messages; i++) {
+                String message = producer.createMessage();
+                CompletableFuture<SendResult<String, String>> future = kafkaTemplate.send(topicName, message);
+                future.whenComplete((result, ex) -> {
+                    if (ex == null) {
+                        logger.info("Sent message=[" + message +
+                                "] with offset=[" + result.getRecordMetadata().offset() + "]");
+                    } else {
+                        logger.info("Unable to send message=[" +
+                                message + "] due to : " + ex.getMessage());
+                    }
+                });
+            }
             try {
                 Thread.sleep(seconds * 1000);
             } catch (InterruptedException ignored) {}
