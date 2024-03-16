@@ -8,4 +8,6 @@ public interface GeneratorManager {
     long getSeconds();
     void setMessages(long count);
     long getMessages();
+    void setFillerSize(int size);
+    int getFillerSize();
 }

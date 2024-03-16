@@ -8,4 +8,10 @@ public class TemperatureProducer implements MessageProducer {
         Temperature t = Temperature.createCelsiusTemp(r.nextDouble(100));
         return t.toJsonString();
     }
+    public void setFillerSize(int size) {
+        Temperature.setFillerSize(size);
+    }
+    public int getFillerSize() {
+        return Temperature.getFillerSize();
+    }
 }

@@ -1,6 +1,7 @@
 ---
 myapp:
   val: ooh
+  writer: console
   kafka:
     topicName: test-topic-one
 #    bootstrapAddress: kafka-00:9092,kafka-01:9092,kafka-02:9092

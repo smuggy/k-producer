@@ -3,9 +3,7 @@ package net.podspace.producer;
 import net.podspace.management.MBeanContainer;
 import net.podspace.management.ManagementAgent;
 import net.podspace.management.ManagementAgentImpl;
-import net.podspace.producer.generator.Generator;
-import net.podspace.producer.generator.GeneratorManager;
-import net.podspace.producer.generator.TemperatureProducer;
+import net.podspace.producer.generator.*;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -35,6 +33,8 @@ public class AppConfig {
     private String topicName;//="test-topic-one";
     @Value("${myapp.kafka.bootstrapAddress}")
     private String bootstrapAddress;//="192.168.1.60:9092";
+    @Value("${myapp.writer}")
+    private String writer;
 
     //private Generator generator;
 
@@ -52,6 +52,37 @@ public class AppConfig {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapAddress);
         return new KafkaAdmin(configs);
+    }
+
+    @Bean
+    public KafkaWriter kafkaWriter() {
+        var writer = new KafkaWriter();
+        writer.setTopicName(topicName);
+        writer.setKafkaTemplate(kafkaTemplate());
+        return writer;
+    }
+
+    @Bean
+    public ConsoleWriter consoleWriter() {
+        return new ConsoleWriter();
+    }
+
+    @Bean
+    public EmptyWriter emptyWriter() {
+        return new EmptyWriter();
+    }
+    @Bean
+    public MessageWriter messageWriter() {
+        if (writer.equalsIgnoreCase("console")) {
+            logger.info("Creating console writer.");
+            return consoleWriter();
+        }
+        if (writer.equalsIgnoreCase("kafka")) {
+            logger.info("Creating kafka writer.");
+            return kafkaWriter();
+        }
+        logger.info("Invalid writer '" + writer + "' using empty writer.");
+        return emptyWriter();
     }
 
     @Bean
@@ -77,12 +108,10 @@ public class AppConfig {
 
     @Bean
     @Scope("prototype")
-    public Generator generator() {
+    public Generator generator(MessageWriter messageWriter) {
         var producer = new TemperatureProducer();
-        var generator = new Generator(producer);
+        var generator = new Generator(producer, messageWriter);
         generator.setSeconds(5);
-        generator.setTopicName(topicName);
-        generator.setKafkaTemplate(kafkaTemplate());
         return generator;
     }
 

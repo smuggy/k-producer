@@ -118,4 +118,30 @@ public class GeneratorController {
         logger.info("Woot... raised to " + generator.getMessages() + " messages.");
         return "Success... raised messages";
     }
+    @GetMapping("/lowerfillersize")
+    public String lowerFillerSize() {
+        try {
+            logger.info("Calling generator quit.");
+            var fillerSize = generator.getFillerSize();
+            generator.setFillerSize(fillerSize - 512);
+        } catch (Throwable t) {
+            logger.warn("Error occurred.", t);
+            return "Failure... I dunno";
+        }
+        logger.info("Woot... lowered filler to " + generator.getFillerSize() + " bytes.");
+        return "Success... lowered filler size";
+    }
+    @GetMapping("/raisefillersize")
+    public String raiseFillerSize() {
+        try {
+            logger.info("Calling generator quit.");
+            var fillerSize = generator.getFillerSize();
+            generator.setFillerSize(fillerSize + 512);
+        } catch (Throwable t) {
+            logger.warn("Error occurred.", t);
+            return "Failure... I dunno";
+        }
+        logger.info("Woot... raised filler to " + generator.getFillerSize() + " bytes.");
+        return "Success... raised filler size";
+    }
 }
