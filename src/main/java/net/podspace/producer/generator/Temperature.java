@@ -50,12 +50,9 @@ public class Temperature {
     public static void setFillerSize(int size) {
         if (size < 0) {
             fillerSize = 0;
-        } else if (size > 1_000_000) {
-            fillerSize = 1_000_000;
         } else {
-            fillerSize = size;
+            fillerSize = Math.min(size, 1_000_000);
         }
-
     }
     public String generateFiller() {
         if (fillerSize > 0) {
