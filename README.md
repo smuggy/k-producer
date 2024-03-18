@@ -1,4 +1,9 @@
-# Feature List
+# k-producer
+
+## Overview
+Tool to test Kafka.
+
+## Feature List
 * configs in Consul - done
 * automatic send message for stream 
 * ability to start/stop message stream - done
@@ -6,4 +11,7 @@
 * change rate of messaging - done
 * containerize application - done
 * send occasional marker?
-* size of message
+* size of message - done
+* consumer
+* metrics
+* 

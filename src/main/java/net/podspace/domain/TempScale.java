@@ -1,4 +1,6 @@
-package net.podspace.producer.generator;
+package net.podspace.domain;
+
+import com.fasterxml.jackson.annotation.JsonValue;
 
 public enum TempScale {
     FAHRENHEIT("F"), CELSIUS("C");
@@ -8,6 +10,7 @@ public enum TempScale {
         this.scale = scale;
     }
 
+    @JsonValue
     public String getScale() {
         return this.scale;
     }

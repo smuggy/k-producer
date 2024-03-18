@@ -1,8 +1,10 @@
-package net.podspace.producer.generator;
+package net.podspace.domain;
+
+import net.podspace.producer.generator.MessageGenerator;
 
 import java.util.Random;
 
-public class TemperatureProducer implements MessageProducer {
+public class TemperatureGenerator implements MessageGenerator {
     public String createMessage() {
         Random r = new Random();
         Temperature t = Temperature.createCelsiusTemp(r.nextDouble(100));

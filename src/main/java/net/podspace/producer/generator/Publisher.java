@@ -7,19 +7,19 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-public class Generator implements Runnable, GeneratorManager {
-    private static final Logger logger = LoggerFactory.getLogger(Generator.class);
+public class Publisher implements Runnable, PublisherManager {
+    private static final Logger logger = LoggerFactory.getLogger(Publisher.class);
     private long seconds;
     private boolean pause;
     private boolean started;
     private boolean quit;
     private long messages;
-    private final MessageProducer producer;
+    private final MessageGenerator generator;
     private final MessageWriter writer;
     private ExecutorService pool;
 
-    public Generator(MessageProducer producer, MessageWriter writer) {
-        this.producer = producer;
+    public Publisher(MessageGenerator generator, MessageWriter writer) {
+        this.generator = generator;
         this.writer = writer;
         this.messages = 1;
         this.seconds = 5;
@@ -46,10 +46,10 @@ public class Generator implements Runnable, GeneratorManager {
         return this.seconds;
     }
     public void setFillerSize(int size) {
-        producer.setFillerSize(size);
+        generator.setFillerSize(size);
     }
     public int getFillerSize() {
-        return producer.getFillerSize();
+        return generator.getFillerSize();
     }
 
     public void setMessages(long count) {
@@ -76,6 +76,7 @@ public class Generator implements Runnable, GeneratorManager {
 
     public void teardown() {
         try {
+            quit = true;
             if (! started) {
                 logger.info("teardown: not started, leaving");
             }
@@ -116,7 +117,7 @@ public class Generator implements Runnable, GeneratorManager {
             }
 
             for (long i=0; i<this.messages; i++) {
-                String message = producer.createMessage();
+                String message = generator.createMessage();
                 writer.writeMessage(message);
             }
             try {

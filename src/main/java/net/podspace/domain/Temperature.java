@@ -1,4 +1,6 @@
-package net.podspace.producer.generator;
+package net.podspace.domain;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -10,12 +12,18 @@ import java.util.UUID;
  */
 
 public class Temperature {
-    private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
 
-    private final TempScale scale;
-    private final LocalDateTime time;
-    private final double temp;
-    private final String time_id;
+    @JsonProperty("scale")
+    private TempScale scale;
+    @JsonProperty("time")
+    private String time;
+    @JsonProperty("temp")
+    private double temp;
+    @JsonProperty("id")
+    private String timeId;
+    @JsonProperty("filler")
+    private String filler;
     private static int fillerSize = 0;
 
     public static Temperature createCelsiusTemp(double temp) {
@@ -25,18 +33,19 @@ public class Temperature {
         return new Temperature(temp, TempScale.FAHRENHEIT);
     }
 
+    public Temperature(){}
     Temperature(double temp, TempScale scale) {
         this.temp = temp;
-        this.time = LocalDateTime.now();
+        this.time = LocalDateTime.now().format(formatter);
         this.scale = scale;
-        this.time_id = UUID.randomUUID().toString();
+        this.timeId = UUID.randomUUID().toString();
     }
 
     public TempScale getScale() {
         return scale;
     }
 
-    public LocalDateTime getTime() {
+    public String getTime() {
         return time;
     }
 
@@ -71,10 +80,14 @@ public class Temperature {
 
     public String toJsonString() {
         return "{" +
-                "\"id\":\"" + time_id +
+                "\"id\":\"" + timeId +
                 "\",\"temp\":" + temp +
-                ",\"time\":\"" + time.format(formatter) +
+                ",\"time\":\"" + time +
                 "\",\"scale\":\"" + scale.getScale() +
                 "\",\"filler\":\"" + generateFiller() + "\"}";
+    }
+    @Override
+    public String toString() {
+        return toJsonString();
     }
 }

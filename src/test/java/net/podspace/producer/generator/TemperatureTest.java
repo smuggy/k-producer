@@ -1,7 +1,10 @@
 package net.podspace.producer.generator;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import net.podspace.domain.TempScale;
+import net.podspace.domain.Temperature;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -22,6 +25,15 @@ public class TemperatureTest {
     @Test
     public void TestValidJson() {
         var temp = Temperature.createFahrenheitTemp(33);
+        System.out.println(temp.toJsonString());
+        ObjectMapper om = new ObjectMapper();
+        try {
+            var newtemp = om.readValue(temp.toJsonString(), Temperature.class);
+        } catch (JsonProcessingException jme) {
+            System.out.println("Processing exception occurred.");
+            System.out.println(jme);
+            Assertions.fail();
+        }
         Assertions.assertTrue(isValidJSON(temp.toJsonString()));
     }
 

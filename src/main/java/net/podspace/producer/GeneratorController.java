@@ -1,6 +1,6 @@
 package net.podspace.producer;
 
-import net.podspace.producer.generator.Generator;
+import net.podspace.producer.generator.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,15 +11,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/generator")
 public class GeneratorController {
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
-    private final Generator generator;
+    private final Publisher publisher;
 
-    public GeneratorController(Generator generator) {
-        this.generator = generator;
+    public GeneratorController(Publisher publisher) {
+        this.publisher = publisher;
     }
     @GetMapping("/start")
     public String startGenerator() {
         logger.info("Calling generator initiate.");
-        generator.initiate();
+        publisher.initiate();
         logger.info("Woot... started.");
         return "Success... started";
     }
@@ -28,7 +28,7 @@ public class GeneratorController {
     public String stopGenerator() {
         try {
             logger.info("Calling generator quit.");
-            generator.quit();
+            publisher.quit();
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
@@ -41,7 +41,7 @@ public class GeneratorController {
     public String pauseGenerator() {
         try {
             logger.info("Calling generator quit.");
-            generator.pause();
+            publisher.pause();
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
@@ -54,7 +54,7 @@ public class GeneratorController {
     public String resumeGenerator() {
         try {
             logger.info("Calling generator quit.");
-            generator.resume();
+            publisher.resume();
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
@@ -66,82 +66,82 @@ public class GeneratorController {
     public String lowerSleep() {
         try {
             logger.info("Calling generator quit.");
-            var seconds = generator.getSeconds();
+            var seconds = publisher.getSeconds();
             if (seconds > 1)
-                generator.setSeconds(seconds - 1);
+                publisher.setSeconds(seconds - 1);
             else
-                generator.setSeconds(1);
+                publisher.setSeconds(1);
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... lowered to " + generator.getSeconds() + " seconds.");
+        logger.info("Woot... lowered to " + publisher.getSeconds() + " seconds.");
         return "Success... lowered time";
     }
     @GetMapping("/raisesleep")
     public String raiseSleep() {
         try {
             logger.info("Calling generator quit.");
-            var seconds = generator.getSeconds();
-            generator.setSeconds(seconds + 1);
+            var seconds = publisher.getSeconds();
+            publisher.setSeconds(seconds + 1);
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... raised to " + generator.getSeconds() + " seconds.");
+        logger.info("Woot... raised to " + publisher.getSeconds() + " seconds.");
         return "Success... raised time";
     }
     @GetMapping("/lowermessages")
     public String lowerMessages() {
         try {
             logger.info("Calling generator quit.");
-            var messages = generator.getMessages();
-            if (messages <= 5) generator.setMessages(1);
-            else generator.setMessages(messages - 5);
+            var messages = publisher.getMessages();
+            if (messages <= 5) publisher.setMessages(1);
+            else publisher.setMessages(messages - 5);
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... lowered to " + generator.getMessages() + " messages.");
+        logger.info("Woot... lowered to " + publisher.getMessages() + " messages.");
         return "Success... lowered messages";
     }
     @GetMapping("/raisemessages")
     public String raiseMessages() {
         try {
             logger.info("Calling generator quit.");
-            var messages = generator.getMessages();
-            generator.setMessages(messages + 5);
+            var messages = publisher.getMessages();
+            publisher.setMessages(messages + 5);
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... raised to " + generator.getMessages() + " messages.");
+        logger.info("Woot... raised to " + publisher.getMessages() + " messages.");
         return "Success... raised messages";
     }
     @GetMapping("/lowerfillersize")
     public String lowerFillerSize() {
         try {
             logger.info("Calling generator quit.");
-            var fillerSize = generator.getFillerSize();
-            generator.setFillerSize(fillerSize - 512);
+            var fillerSize = publisher.getFillerSize();
+            publisher.setFillerSize(fillerSize - 512);
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... lowered filler to " + generator.getFillerSize() + " bytes.");
+        logger.info("Woot... lowered filler to " + publisher.getFillerSize() + " bytes.");
         return "Success... lowered filler size";
     }
     @GetMapping("/raisefillersize")
     public String raiseFillerSize() {
         try {
             logger.info("Calling generator quit.");
-            var fillerSize = generator.getFillerSize();
-            generator.setFillerSize(fillerSize + 512);
+            var fillerSize = publisher.getFillerSize();
+            publisher.setFillerSize(fillerSize + 512);
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... raised filler to " + generator.getFillerSize() + " bytes.");
+        logger.info("Woot... raised filler to " + publisher.getFillerSize() + " bytes.");
         return "Success... raised filler size";
     }
 }

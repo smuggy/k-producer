@@ -1,6 +1,6 @@
 package net.podspace.producer.generator;
 
-public interface GeneratorManager {
+public interface PublisherManager {
     void resume();
     void pause();
     void quit();
