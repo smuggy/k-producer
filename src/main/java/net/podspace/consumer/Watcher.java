@@ -1,5 +1,6 @@
 package net.podspace.consumer;
 
+import io.micrometer.core.annotation.Counted;
 import net.podspace.producer.generator.MessageReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,6 +87,7 @@ public class Watcher<T> implements Runnable {
         logger.info("In run method, retrieval done...");
     }
 
+    @Counted
     private void retrieveMessageStream() {
         logger.info("In retrieve stream method...");
         while (!quit) {

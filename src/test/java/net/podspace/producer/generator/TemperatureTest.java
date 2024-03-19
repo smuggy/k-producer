@@ -1,7 +1,6 @@
 package net.podspace.producer.generator;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.podspace.domain.TempScale;
 import net.podspace.domain.Temperature;

@@ -1,7 +1,25 @@
 ---
+management:
+  endpoint:
+    shutdown:
+      enabled: true
+    health:
+      enabled: true
+    metrics:
+      enabled: true
+    info:
+      enabled: true
+  observations:
+    annotations:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+#    enabled-by-default: false
 myapp:
   val: ooh
-  messagingMechanism: kafka
+  messagingMechanism: console
   kafka:
     topicName: test-topic-one
 #    bootstrapAddress: kafka-00:9092,kafka-01:9092,kafka-02:9092
@@ -45,6 +63,23 @@ spring:
         health-check-interval: 15s
         health-check-url: http://k-producer.ps.internal/actuator/health
 ---
+management:
+  endpoint:
+    shutdown:
+      enabled: true
+    health:
+      enabled: true
+    metrics:
+      enabled: true
+    info:
+      enabled: true
+  observations:
+    annotations:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: "*"
 spring:
   jmx:
     enabled: true
@@ -63,5 +98,8 @@ spring:
         acl-token: anonymous
         enabled: true
       discovery:
+        tags: app
         health-check-interval: 15s
         health-check-url: http://app.podspace.internal:8080/actuator/health
+        metadata:
+          metrics-path: /actuator/prometheus

@@ -1,5 +1,7 @@
 package net.podspace.producer;
 
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.MeterRegistry;
 import net.podspace.consumer.Watcher;
 import net.podspace.domain.Temperature;
 import net.podspace.domain.TemperatureConsumer;
@@ -17,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.actuate.autoconfigure.metrics.MeterRegistryCustomizer;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -207,5 +210,10 @@ public class AppConfig {
         } catch (NotCompliantMBeanException ignored) {
         }
         return agent;
+    }
+
+    @Bean
+    public MeterRegistryCustomizer<MeterRegistry> addMessageRegistry() {
+        return registry -> registry.config().namingConvention().name("services.publisher.add", Meter.Type.COUNTER);
     }
 }

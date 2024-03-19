@@ -3,6 +3,7 @@ package net.podspace.producer.generator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -13,6 +14,9 @@ public class EmptyReader implements MessageReader{
     }
     @Override
     public List<String> readMessage() {
+        try {
+            Thread.sleep(Duration.ofSeconds(5));
+        } catch (InterruptedException ignored){}
         return new ArrayList<>();
     }
 }
