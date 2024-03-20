@@ -41,6 +41,9 @@ public class Temperature {
         this.timeId = UUID.randomUUID().toString();
     }
 
+    public String getTimeId() {
+        return timeId;
+    }
     public TempScale getScale() {
         return scale;
     }

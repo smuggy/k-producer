@@ -1,5 +1,5 @@
 resource consul_key_prefix app_configuration {
-  path_prefix = "config/k-producer/myapp/"
+  path_prefix = "config/k-producer,ext/myapp/"
   subkeys = {
     "val"                    = "tf-val"
     "messenger"              = "kafka"

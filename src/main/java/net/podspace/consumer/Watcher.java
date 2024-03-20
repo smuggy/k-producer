@@ -1,23 +1,29 @@
 package net.podspace.consumer;
 
 import io.micrometer.core.annotation.Counted;
+import io.prometheus.client.Summary;
 import net.podspace.producer.generator.MessageReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class Watcher<T> implements Runnable {
     private static final Logger logger = LoggerFactory.getLogger(Watcher.class);
+    private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
     private boolean started;
     private boolean quit;
     private boolean pause;
     private ExecutorService pool;
     private final MessageConsumer<T> consumer;
     private final MessageReader reader;
+    private BlockingQueue<ValueEnvelope<T>> items;
 
     public Watcher(MessageConsumer<T> c, MessageReader r) {
         this.started = false;
@@ -26,6 +32,9 @@ public class Watcher<T> implements Runnable {
         this.consumer = c;
     }
 
+    public void setReturnQueue(BlockingQueue<ValueEnvelope<T>> queue) {
+        this.items = queue;
+    }
     public void resume() {
         pause = false;
     }
@@ -89,12 +98,12 @@ public class Watcher<T> implements Runnable {
 
     @Counted
     private void retrieveMessageStream() {
-        logger.info("In retrieve stream method...");
+        logger.debug("In retrieve stream method...");
         while (!quit) {
             if (pause) {
                 logger.info("retrieving paused...");
                 try {
-                    Thread.sleep(10000);
+                    Thread.sleep(5_000);
                 } catch (InterruptedException ignored) {
                 }
                 continue;
@@ -107,7 +116,19 @@ public class Watcher<T> implements Runnable {
                 for (String mess : list) {
                     Optional<T> val = consumer.getMessage(mess);
                     if (val.isPresent()) {
-                        logger.info("Value is: " + val.get());
+                        logger.debug("Value is: " + val.get());
+                        if (items != null) {
+                            ValueEnvelope<T> envelope = new ValueEnvelope<>();
+                            envelope.item = val.get();
+                            envelope.time = LocalDateTime.now().format(formatter);
+                            if (items.offer(envelope)) {
+                                logger.debug("added item to blocking queue.");
+                            } else {
+                                logger.debug("unable to add item to blocking queue.");
+                            }
+                        } else {
+                            logger.info("No queue provided, dropping item.");
+                        }
                     } else {
                         logger.info("No value present or parsable in message: " + mess);
                     }

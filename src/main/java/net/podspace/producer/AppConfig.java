@@ -189,7 +189,7 @@ public class AppConfig {
     public Publisher publisher(MessageWriter messageWriter) {
         var producer = new TemperatureGenerator();
         var publisher = new Publisher(producer, messageWriter);
-        publisher.setSeconds(5);
+        publisher.setSleep(10);
         return publisher;
     }
 

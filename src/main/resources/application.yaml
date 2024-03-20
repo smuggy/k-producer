@@ -19,7 +19,7 @@ management:
 #    enabled-by-default: false
 myapp:
   val: ooh
-  messenger: console
+  messenger: queue
   kafka:
     topicName: test-topic-one
 #    bootstrapAddress: kafka-00:9092,kafka-01:9092,kafka-02:9092

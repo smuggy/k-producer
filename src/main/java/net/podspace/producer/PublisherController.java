@@ -66,29 +66,26 @@ public class PublisherController {
     public String lowerSleep() {
         try {
             logger.info("Calling publisher lower sleep.");
-            var seconds = publisher.getSeconds();
-            if (seconds > 1)
-                publisher.setSeconds(seconds - 1);
-            else
-                publisher.setSeconds(1);
+            var time = publisher.getSleep();
+            publisher.setSleep(time - 1);
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... lowered to " + publisher.getSeconds() + " seconds.");
+        logger.info("Woot... lowered to " + publisher.getSleep() + " half seconds.");
         return "Success... lowered time";
     }
     @GetMapping("/raisesleep")
     public String raiseSleep() {
         try {
             logger.info("Calling publisher raise sleep.");
-            var seconds = publisher.getSeconds();
-            publisher.setSeconds(seconds + 1);
+            var time = publisher.getSleep();
+            publisher.setSleep(time + 1);
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... raised to " + publisher.getSeconds() + " seconds.");
+        logger.info("Woot... raised to " + publisher.getSleep() + " half seconds.");
         return "Success... raised time";
     }
     @GetMapping("/lowermessages")

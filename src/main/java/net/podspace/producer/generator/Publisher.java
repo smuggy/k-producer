@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit;
 
 public class Publisher implements Runnable, PublisherManager {
     private static final Logger logger = LoggerFactory.getLogger(Publisher.class);
-    private long seconds;
+    private long halfSeconds;
     private boolean pause;
     private boolean started;
     private boolean quit;
@@ -23,7 +23,7 @@ public class Publisher implements Runnable, PublisherManager {
         this.generator = generator;
         this.writer = writer;
         this.messages = 1;
-        this.seconds = 5;
+        this.halfSeconds = 10;
         this.started = false;
     }
 
@@ -39,12 +39,13 @@ public class Publisher implements Runnable, PublisherManager {
         teardown();
         logger.info("torn down...");
     }
-    public void setSeconds(long seconds) {
-        if (this.seconds < 0) this.seconds = 5;
-        else this.seconds = seconds;
+    public void setSleep(long halfSeconds) {
+        if (halfSeconds < 0) this.halfSeconds = 5;
+        else if (halfSeconds == 0) this.halfSeconds = 1;
+        else this.halfSeconds = halfSeconds;
     }
-    public long getSeconds() {
-        return this.seconds;
+    public long getSleep() {
+        return this.halfSeconds;
     }
     public void setFillerSize(int size) {
         generator.setFillerSize(size);
@@ -88,7 +89,7 @@ public class Publisher implements Runnable, PublisherManager {
             logger.info("teardown: shutting down");
             pool.shutdown();
             pool.close();
-            while (!pool.awaitTermination(5L, TimeUnit.MINUTES)) {
+            while (!pool.awaitTermination(2L, TimeUnit.MINUTES)) {
                 logger.info("Not yet. Still waiting for termination");
             }
 
@@ -113,7 +114,7 @@ public class Publisher implements Runnable, PublisherManager {
             if (pause) {
                 logger.info("streaming paused...");
                 try {
-                    Thread.sleep(10000);
+                    Thread.sleep(10_000);
                 } catch (InterruptedException ignored) {}
                 continue;
             }
@@ -123,7 +124,7 @@ public class Publisher implements Runnable, PublisherManager {
                 writer.writeMessage(message);
             }
             try {
-                Thread.sleep(seconds * 1000);
+                Thread.sleep(halfSeconds * 500);
             } catch (InterruptedException ignored) {}
         }
     }
