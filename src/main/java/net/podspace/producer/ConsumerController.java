@@ -55,7 +55,7 @@ public class ConsumerController {
     @GetMapping("/resume")
     public String resumeWatcher() {
         try {
-            logger.info("Calling generator resume.");
+            logger.info("Calling watcher resume.");
             watcher.resume();
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);

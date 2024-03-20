@@ -8,26 +8,26 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/generator")
-public class GeneratorController {
+@RequestMapping("/publisher")
+public class PublisherController {
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
     private final Publisher publisher;
 
-    public GeneratorController(Publisher publisher) {
+    public PublisherController(Publisher publisher) {
         this.publisher = publisher;
     }
     @GetMapping("/start")
-    public String startGenerator() {
-        logger.info("Calling generator initiate.");
+    public String startPublisher() {
+        logger.info("Calling publisher initiate.");
         publisher.initiate();
         logger.info("Woot... started.");
         return "Success... started";
     }
 
     @GetMapping("/stop")
-    public String stopGenerator() {
+    public String stopPublisher() {
         try {
-            logger.info("Calling generator quit.");
+            logger.info("Calling publisher quit.");
             publisher.quit();
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
@@ -38,9 +38,9 @@ public class GeneratorController {
     }
 
     @GetMapping("/pause")
-    public String pauseGenerator() {
+    public String pausePublisher() {
         try {
-            logger.info("Calling generator quit.");
+            logger.info("Calling publisher pause.");
             publisher.pause();
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
@@ -51,9 +51,9 @@ public class GeneratorController {
     }
 
     @GetMapping("/resume")
-    public String resumeGenerator() {
+    public String resumePublisher() {
         try {
-            logger.info("Calling generator quit.");
+            logger.info("Calling publisher resume.");
             publisher.resume();
         } catch (Throwable t) {
             logger.warn("Error occurred.", t);
@@ -65,7 +65,7 @@ public class GeneratorController {
     @GetMapping("/lowersleep")
     public String lowerSleep() {
         try {
-            logger.info("Calling generator quit.");
+            logger.info("Calling publisher lower sleep.");
             var seconds = publisher.getSeconds();
             if (seconds > 1)
                 publisher.setSeconds(seconds - 1);
@@ -81,7 +81,7 @@ public class GeneratorController {
     @GetMapping("/raisesleep")
     public String raiseSleep() {
         try {
-            logger.info("Calling generator quit.");
+            logger.info("Calling publisher raise sleep.");
             var seconds = publisher.getSeconds();
             publisher.setSeconds(seconds + 1);
         } catch (Throwable t) {
@@ -94,7 +94,7 @@ public class GeneratorController {
     @GetMapping("/lowermessages")
     public String lowerMessages() {
         try {
-            logger.info("Calling generator quit.");
+            logger.info("Calling publisher lower messages.");
             var messages = publisher.getMessages();
             if (messages <= 5) publisher.setMessages(1);
             else publisher.setMessages(messages - 5);
@@ -108,7 +108,7 @@ public class GeneratorController {
     @GetMapping("/raisemessages")
     public String raiseMessages() {
         try {
-            logger.info("Calling generator quit.");
+            logger.info("Calling publisher raise messages.");
             var messages = publisher.getMessages();
             publisher.setMessages(messages + 5);
         } catch (Throwable t) {
@@ -121,7 +121,7 @@ public class GeneratorController {
     @GetMapping("/lowerfillersize")
     public String lowerFillerSize() {
         try {
-            logger.info("Calling generator quit.");
+            logger.info("Calling publisher lower filler size.");
             var fillerSize = publisher.getFillerSize();
             publisher.setFillerSize(fillerSize - 512);
         } catch (Throwable t) {
@@ -134,7 +134,7 @@ public class GeneratorController {
     @GetMapping("/raisefillersize")
     public String raiseFillerSize() {
         try {
-            logger.info("Calling generator quit.");
+            logger.info("Calling publisher raise filler size.");
             var fillerSize = publisher.getFillerSize();
             publisher.setFillerSize(fillerSize + 512);
         } catch (Throwable t) {

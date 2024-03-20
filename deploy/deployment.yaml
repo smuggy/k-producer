@@ -14,7 +14,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: k-producer
-        app.kubernetes.io/version: 0.1.2
+        app.kubernetes.io/version: 0.2.6
     spec:
       serviceAccountName: k-producer-sa
       automountServiceAccountToken: true
@@ -22,7 +22,7 @@ spec:
         kubernetes.io/os: linux
       containers:
         - name: k-producer-ctr
-          image: mmckernan/k-producer:0.1.2
+          image: mmckernan/k-producer:0.2.6
           ports:
             - containerPort: 8080
               name: http

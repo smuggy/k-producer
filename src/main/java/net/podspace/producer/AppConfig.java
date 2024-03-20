@@ -42,8 +42,8 @@ public class AppConfig {
     private String topicName;//="test-topic-one";
     @Value("${myapp.kafka.bootstrapAddress}")
     private String bootstrapAddress;//="192.168.1.60:9092";
-    @Value("${myapp.messagingMechanism}")
-    private String messagingMechanism;
+    @Value("${myapp.messenger}")
+    private String messenger;
     @Autowired
     private ApplicationContext context;
 
@@ -67,7 +67,7 @@ public class AppConfig {
 
     @Bean
     public KafkaWriter kafkaWriter() {
-        if (!messagingMechanism.equalsIgnoreCase("kafka"))
+        if (!messenger.equalsIgnoreCase("kafka"))
             return null;
         var writer = new KafkaWriter();
         writer.setTopicName(topicName);
@@ -77,7 +77,7 @@ public class AppConfig {
 
     @Bean
     public KafkaReader kafkaReader() {
-        if (!messagingMechanism.equalsIgnoreCase("kafka"))
+        if (!messenger.equalsIgnoreCase("kafka"))
             return null;
         return new KafkaReader(kafkaConsumer(), topicName);
     }
@@ -105,29 +105,29 @@ public class AppConfig {
 
     @Bean
     public MessageWriter messageWriter() {
-        if (messagingMechanism.equalsIgnoreCase("console")) {
+        if (messenger.equalsIgnoreCase("console")) {
             logger.info("Creating console writer.");
             return consoleWriter();
         }
-        if (messagingMechanism.equalsIgnoreCase("kafka")) {
+        if (messenger.equalsIgnoreCase("kafka")) {
             logger.info("Creating kafka writer.");
             return kafkaWriter();
         }
-        if (messagingMechanism.equalsIgnoreCase("queue")) {
+        if (messenger.equalsIgnoreCase("queue")) {
             logger.info("Creating queue writer.");
             return context.getBean(QueueManager.class);
         }
-        logger.info("Invalid writer '" + messagingMechanism + "' using empty writer.");
+        logger.info("Invalid writer '" + messenger + "' using empty writer.");
         return emptyWriter();
     }
 
     @Bean
     public MessageReader messageReader() {
-        if (messagingMechanism.equalsIgnoreCase("queue")) {
+        if (messenger.equalsIgnoreCase("queue")) {
             logger.info("Creating queue message reader.");
             return context.getBean(QueueManager.class);
         }
-        if (messagingMechanism.equalsIgnoreCase("kafka")) {
+        if (messenger.equalsIgnoreCase("kafka")) {
             logger.info("Creating kafka message reader.");
             return context.getBean(KafkaReader.class);
         }
@@ -137,7 +137,7 @@ public class AppConfig {
 
     @Bean
     public ProducerFactory<String, String> producerFactory() {
-        if (!messagingMechanism.equalsIgnoreCase("kafka"))
+        if (!messenger.equalsIgnoreCase("kafka"))
             return null;
         Map<String, Object> configProps = new HashMap<>();
         logger.debug("Producer factory: bootstrap server: " + bootstrapAddress);
@@ -155,14 +155,14 @@ public class AppConfig {
 
     @Bean
     public KafkaTemplate<String, String> kafkaTemplate() {
-        if (!messagingMechanism.equalsIgnoreCase("kafka"))
+        if (!messenger.equalsIgnoreCase("kafka"))
             return null;
         return new KafkaTemplate<>(producerFactory());
     }
 
     @Bean
     public KafkaConsumer<String, String> kafkaConsumer() {
-        if (!messagingMechanism.equalsIgnoreCase("kafka"))
+        if (!messenger.equalsIgnoreCase("kafka"))
             return null;
         Map<String, Object> configProps = new HashMap<>();
         logger.info("Consumer: bootstrap server: " + bootstrapAddress);
@@ -205,7 +205,7 @@ public class AppConfig {
         var agent = new ManagementAgentImpl();
         try {
             MBeanContainer mbc = new MBeanContainer(publisher, PublisherManager.class);
-            mbc.setName("name=generatorManager");
+            mbc.setName("name=publisherManager");
             agent.addBean(mbc);
         } catch (NotCompliantMBeanException ignored) {
         }

@@ -19,7 +19,7 @@ management:
 #    enabled-by-default: false
 myapp:
   val: ooh
-  messagingMechanism: console
+  messenger: console
   kafka:
     topicName: test-topic-one
 #    bootstrapAddress: kafka-00:9092,kafka-01:9092,kafka-02:9092
@@ -41,6 +41,23 @@ spring:
       config:
         enabled: false
 ---
+management:
+  endpoint:
+    shutdown:
+      enabled: true
+    health:
+      enabled: true
+    metrics:
+      enabled: true
+    info:
+      enabled: true
+  observations:
+    annotations:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: "*"
 spring:
   jmx:
     enabled: true
