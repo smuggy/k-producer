@@ -11,7 +11,7 @@ import java.util.UUID;
  * This class represents the temperature at a moment in time.
  */
 
-public class Temperature {
+public class Temperature implements Comparable<Temperature>{
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
 
     @JsonProperty("scale")
@@ -92,5 +92,11 @@ public class Temperature {
     @Override
     public String toString() {
         return toJsonString();
+    }
+
+    @Override
+    public int compareTo(Temperature other) {
+        return LocalDateTime.parse(this.time, formatter).
+                compareTo(LocalDateTime.parse(other.time, formatter));
     }
 }

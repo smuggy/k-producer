@@ -17,14 +17,17 @@ management:
       exposure:
         include: "*"
 #    enabled-by-default: false
+---
 myapp:
   val: ooh
-  messenger: queue
+  messenger: kafka
   kafka:
     topicName: test-topic-one
+    groupId: test-group-id
 #    bootstrapAddress: kafka-00:9092,kafka-01:9092,kafka-02:9092
     bootstrapAddress: 127.0.0.1:9092
 #    bootstrapAddress: localhost:9092
+---
 spring:
   jmx:
     enabled: true
@@ -41,23 +44,23 @@ spring:
       config:
         enabled: false
 ---
-management:
-  endpoint:
-    shutdown:
-      enabled: true
-    health:
-      enabled: true
-    metrics:
-      enabled: true
-    info:
-      enabled: true
-  observations:
-    annotations:
-      enabled: true
-  endpoints:
-    web:
-      exposure:
-        include: "*"
+#management:
+#  endpoint:
+#    shutdown:
+#      enabled: true
+#    health:
+#      enabled: true
+#    metrics:
+#      enabled: true
+#    info:
+#      enabled: true
+#  observations:
+#    annotations:
+#      enabled: true
+#  endpoints:
+#    web:
+#      exposure:
+#        include: "*"
 spring:
   jmx:
     enabled: true
@@ -80,30 +83,30 @@ spring:
         health-check-interval: 15s
         health-check-url: http://k-producer.ps.internal/actuator/health
 ---
-management:
-  endpoint:
-    shutdown:
-      enabled: true
-    health:
-      enabled: true
-    metrics:
-      enabled: true
-    info:
-      enabled: true
-  observations:
-    annotations:
-      enabled: true
-  endpoints:
-    web:
-      exposure:
-        include: "*"
+#management:
+#  endpoint:
+#    shutdown:
+#      enabled: true
+#    health:
+#      enabled: true
+#    metrics:
+#      enabled: true
+#    info:
+#      enabled: true
+#  observations:
+#    annotations:
+#      enabled: true
+#  endpoints:
+#    web:
+#      exposure:
+#        include: "*"
 spring:
   jmx:
     enabled: true
   config:
     import: "consul:localhost:8500"
     activate:
-      on-profile: ext
+      on-profile: consul
   application:
     name: k-producer
   cloud:
@@ -117,6 +120,6 @@ spring:
       discovery:
         tags: app
         health-check-interval: 15s
-        health-check-url: http://app.podspace.internal:8080/actuator/health
+        health-check-url: http://app.podspace.internal:${server.port}/actuator/health
         metadata:
           metrics-path: /actuator/prometheus

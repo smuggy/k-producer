@@ -23,6 +23,7 @@ public class ConsumerController {
     private static class ItemStat {
         String id;
         double timeDifference;
+        int size;
     }
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
@@ -87,7 +88,8 @@ public class ConsumerController {
     @GetMapping("/stats")
     public String statistics() {
         StringBuilder sb = new StringBuilder();
-        sb.append("<table><tr><th>time id</th><th>time difference</th></tr>");
+        sb.append("<table><tr><th>time id</th><th>time difference</th><th>size</th></tr>");
+
         while (!items.isEmpty()) {
             var i = items.poll();
             var t = i.item;
@@ -97,13 +99,15 @@ public class ConsumerController {
             ItemStat itemStat = new ItemStat();
             itemStat.id = t.getTimeId();
             itemStat.timeDifference = d.toSeconds() + ((double)d.getNano())/1_000_000_000.0;
+            itemStat.size = i.size;
             list.add(itemStat);
         }
 
         for (ItemStat t : list) {
             String message = "Id: " + t.id + " seconds: " + t.timeDifference;
-            String hmess = "<tr><td>" + t.id + "</td><td>" + t.timeDifference + "</td></tr>";
-            sb.append(hmess).append("\n");
+            String htmlMess = "<tr><td>" + t.id + "</td><td>" + String.format("%.6f", t.timeDifference) + "</td><td>" +
+                    t.size + "</td></tr>";
+            sb.append(htmlMess).append("\n");
             logger.debug(message);
         }
 

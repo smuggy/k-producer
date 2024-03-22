@@ -1,6 +1,5 @@
 package net.podspace.producer.generator;
 
-import io.micrometer.core.annotation.Counted;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -107,7 +106,7 @@ public class Publisher implements Runnable, PublisherManager {
         logger.info("In run method, streaming done...");
     }
 
-    @Counted
+//    @Counted
     public void sendMessageStream() {
         logger.info("In stream method...");
         while (!quit) {

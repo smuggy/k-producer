@@ -1,7 +1,5 @@
 package net.podspace.consumer;
 
-import io.micrometer.core.annotation.Counted;
-import io.prometheus.client.Summary;
 import net.podspace.producer.generator.MessageReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +12,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-public class Watcher<T> implements Runnable {
+public class Watcher<T extends Comparable<T>> implements Runnable {
     private static final Logger logger = LoggerFactory.getLogger(Watcher.class);
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
     private boolean started;
@@ -96,7 +94,6 @@ public class Watcher<T> implements Runnable {
         logger.info("In run method, retrieval done...");
     }
 
-    @Counted
     private void retrieveMessageStream() {
         logger.debug("In retrieve stream method...");
         while (!quit) {
@@ -114,12 +111,13 @@ public class Watcher<T> implements Runnable {
                 logger.info("No message available... wait again.");
             } else {
                 for (String mess : list) {
-                    Optional<T> val = consumer.getMessage(mess);
+                    Optional<Pair<T, Integer>> val = consumer.getMessage(mess);
                     if (val.isPresent()) {
                         logger.debug("Value is: " + val.get());
                         if (items != null) {
                             ValueEnvelope<T> envelope = new ValueEnvelope<>();
-                            envelope.item = val.get();
+                            envelope.item = val.get().a;
+                            envelope.size = val.get().b;
                             envelope.time = LocalDateTime.now().format(formatter);
                             if (items.offer(envelope)) {
                                 logger.debug("added item to blocking queue.");

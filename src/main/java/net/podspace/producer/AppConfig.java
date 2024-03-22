@@ -1,6 +1,5 @@
 package net.podspace.producer;
 
-import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import net.podspace.consumer.Watcher;
 import net.podspace.domain.Temperature;
@@ -11,7 +10,6 @@ import net.podspace.management.ManagementAgent;
 import net.podspace.management.ManagementAgentImpl;
 import net.podspace.producer.generator.*;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -19,14 +17,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.actuate.autoconfigure.metrics.MeterRegistryCustomizer;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
-import org.springframework.kafka.core.DefaultKafkaProducerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.core.*;
 
 import javax.management.NotCompliantMBeanException;
 import java.util.Map;
@@ -44,14 +39,16 @@ public class AppConfig {
     private String bootstrapAddress;//="192.168.1.60:9092";
     @Value("${myapp.messenger}")
     private String messenger;
+    @Value("${groupId}")
+    private String groupId;
     @Autowired
     private ApplicationContext context;
-
-    //private Generator generator;
+    @Autowired
+    private MeterRegistry meterRegistry;
 
     @Bean
     public MyBean beanInstance() {
-        logger.info("==> Creating bean instance with " + val);// + "\t other value is");
+        logger.info("==> Creating bean instance with " + val);
 
         MyBean m = new MyBean();
         m.setValue(val);
@@ -150,7 +147,9 @@ public class AppConfig {
         configProps.put(
                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                 StringSerializer.class);
-        return new DefaultKafkaProducerFactory<>(configProps);
+        ProducerFactory<String,String> pf = new DefaultKafkaProducerFactory<>(configProps);
+        pf.addListener(new MicrometerProducerListener<>(this.meterRegistry));
+        return pf;
     }
 
     @Bean
@@ -161,7 +160,7 @@ public class AppConfig {
     }
 
     @Bean
-    public KafkaConsumer<String, String> kafkaConsumer() {
+    public ConsumerFactory<String, String> kafkaConsumer() {
         if (!messenger.equalsIgnoreCase("kafka"))
             return null;
         Map<String, Object> configProps = new HashMap<>();
@@ -174,14 +173,16 @@ public class AppConfig {
 //                "earliest");
         configProps.put(
                 ConsumerConfig.GROUP_ID_CONFIG,
-                "test-group-id");
+                groupId);
         configProps.put(
                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
                 StringDeserializer.class.getName());
         configProps.put(
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
                 StringDeserializer.class.getName());
-        return new KafkaConsumer<>(configProps);
+        ConsumerFactory<String,String> cf =  new DefaultKafkaConsumerFactory<>(configProps);
+        cf.addListener(new MicrometerConsumerListener<>(this.meterRegistry));
+        return cf;
     }
 
     @Bean
@@ -210,10 +211,5 @@ public class AppConfig {
         } catch (NotCompliantMBeanException ignored) {
         }
         return agent;
-    }
-
-    @Bean
-    public MeterRegistryCustomizer<MeterRegistry> addMessageRegistry() {
-        return registry -> registry.config().namingConvention().name("services.publisher.add", Meter.Type.COUNTER);
     }
 }

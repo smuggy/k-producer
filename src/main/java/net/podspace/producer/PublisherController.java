@@ -141,4 +141,15 @@ public class PublisherController {
         logger.info("Woot... raised filler to " + publisher.getFillerSize() + " bytes.");
         return "Success... raised filler size";
     }
+    @GetMapping("/settings")
+    public String settings() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<html><head><title>Publisher Settings</title></head><body>");
+        sb.append("<table><tr><th>key</th><th>value</th></tr>");
+        sb.append("<tr><td>Sleep time</td><td>").append(publisher.getSleep()).append("</td></tr>");
+        sb.append("<tr><td>Messages</td><td>").append(publisher.getMessages()).append("</td></tr>");
+        sb.append("<tr><td>Filler size</td><td>").append(publisher.getFillerSize()).append("</td></tr>");
+        sb.append("</table></body></html>");
+        return sb.toString();
+    }
 }

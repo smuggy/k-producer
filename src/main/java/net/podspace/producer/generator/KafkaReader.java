@@ -1,10 +1,11 @@
 package net.podspace.producer.generator;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.kafka.core.ConsumerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -13,10 +14,10 @@ import java.util.List;
 
 public class KafkaReader implements MessageReader{
     private static final Logger logger = LoggerFactory.getLogger(KafkaReader.class);
-    private final KafkaConsumer<String,String> consumer;
+    private final Consumer<String,String> consumer;
 
-    public KafkaReader(KafkaConsumer<String,String> consumer, String topicName) {
-        this.consumer = consumer;
+    public KafkaReader(ConsumerFactory<String,String> consumer, String topicName) {
+        this.consumer = consumer.createConsumer();
         this.consumer.subscribe(Collections.singletonList(topicName));
     }
 
