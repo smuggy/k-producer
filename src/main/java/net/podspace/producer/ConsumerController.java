@@ -13,6 +13,8 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -34,7 +36,7 @@ public class ConsumerController {
     public ConsumerController(Watcher<Temperature> watcher) {
         this.list    = new ArrayList<>();
         this.watcher = watcher;
-        this.items   = new ArrayBlockingQueue<>(2_000);
+        this.items   = new ArrayBlockingQueue<>(200_000);
         this.watcher.setReturnQueue(items);
     }
 
@@ -98,14 +100,14 @@ public class ConsumerController {
             Duration d = Duration.between(writeTime, readTime);
             ItemStat itemStat = new ItemStat();
             itemStat.id = t.getTimeId();
-            itemStat.timeDifference = d.toSeconds() + ((double)d.getNano())/1_000_000_000.0;
+            itemStat.timeDifference = d.toSeconds() + ((double)d.getNano())/1_000_000.0; //create time difference in milliseconds
             itemStat.size = i.size;
             list.add(itemStat);
         }
 
         for (ItemStat t : list) {
             String message = "Id: " + t.id + " seconds: " + t.timeDifference;
-            String htmlMess = "<tr><td>" + t.id + "</td><td>" + String.format("%.6f", t.timeDifference) + "</td><td>" +
+            String htmlMess = "<tr><td>" + t.id + "</td><td>" + String.format("%.3f", t.timeDifference) + "</td><td>" +
                     t.size + "</td></tr>";
             sb.append(htmlMess).append("\n");
             logger.debug(message);
@@ -113,5 +115,71 @@ public class ConsumerController {
 
         sb.append("</table><p>total messages: ").append(list.size());
         return sb.toString();
+    }
+
+    @GetMapping("/histogram")
+    public String histogram() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<table><tr><th>limit</th><th>count</th></tr>");
+        var buckets = getHistogram();
+
+        for (HistogramEntry e : buckets) {
+            String htmlMess = "<tr><td>" + String.format("%.3f", e.upper) + "</td><td>" + e.count + "</td></tr>";
+            sb.append(htmlMess).append("\n");
+        }
+
+        sb.append("</table>");
+        return sb.toString();
+    }
+
+    private static class HistogramEntry {
+        double upper;
+        int count;
+        HistogramEntry(double upper) {
+            this.upper = upper;
+            this.count = 0;
+        }
+        void increment() {
+            this.count++;
+        }
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append(upper).append("\t").append(count).append("\n");
+            return sb.toString();
+        }
+    }
+    private static class ItemStatComparator implements Comparator<ItemStat> {
+        public int compare(ItemStat one, ItemStat two) {
+            if (one.timeDifference < two.timeDifference)
+                return -1;
+            if (one.timeDifference > two.timeDifference)
+                return 1;
+            return 0;
+        }
+    }
+    private List<HistogramEntry> getHistogram() {
+        List<HistogramEntry> l = new ArrayList<>(21);
+        if (list == null || list.isEmpty()) {
+            return l;
+        }
+        var max = Collections.max(list.subList(1,list.size()), new ItemStatComparator());
+        var spread = max.timeDifference / 20;
+
+        for (int j=0; j<21; j++) {
+            l.add(new HistogramEntry(spread  * j + spread));
+        }
+        for (ItemStat i: list.subList(1,list.size())) {
+            int location = (int) (i.timeDifference / spread);
+            if (l.get(location).upper >= i.timeDifference)
+                l.get(location).increment();
+            else {
+                if (location < 20)
+                    l.get(location + 1).increment();
+                else
+                    l.get(20).increment();
+            }
+        }
+        return l;
     }
 }

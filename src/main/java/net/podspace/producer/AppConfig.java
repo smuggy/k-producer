@@ -39,7 +39,7 @@ public class AppConfig {
     private String bootstrapAddress;//="192.168.1.60:9092";
     @Value("${myapp.messenger}")
     private String messenger;
-    @Value("${groupId}")
+    @Value("${myapp.kafka.groupId}")
     private String groupId;
     @Autowired
     private ApplicationContext context;
@@ -76,7 +76,7 @@ public class AppConfig {
     public KafkaReader kafkaReader() {
         if (!messenger.equalsIgnoreCase("kafka"))
             return null;
-        return new KafkaReader(kafkaConsumer(), topicName);
+        return new KafkaReader(consumerFactory(), topicName);
     }
 
     @Bean
@@ -160,7 +160,7 @@ public class AppConfig {
     }
 
     @Bean
-    public ConsumerFactory<String, String> kafkaConsumer() {
+    public ConsumerFactory<String, String> consumerFactory() {
         if (!messenger.equalsIgnoreCase("kafka"))
             return null;
         Map<String, Object> configProps = new HashMap<>();

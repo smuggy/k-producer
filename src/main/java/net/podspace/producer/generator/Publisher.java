@@ -106,7 +106,6 @@ public class Publisher implements Runnable, PublisherManager {
         logger.info("In run method, streaming done...");
     }
 
-//    @Counted
     public void sendMessageStream() {
         logger.info("In stream method...");
         while (!quit) {
