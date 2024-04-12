@@ -1,7 +1,9 @@
 # k-producer
 
 ## Overview
-Tool to test Kafka.
+Tool to test Kafka. Act as both a producer and consumer of simple messages, with the ability
+to increase throughput, size, and frequency of the messages. Provide an endpoint that
+shows time between message creation and consumption. 
 
 ## Feature List
 * configs in Consul - done
@@ -26,23 +28,25 @@ a small message (<150 bytes). That looks like:
 The filler can be added to the messages, this is a random set of numbers. The
 API provides for the following:
 
-| Endpoint                   | Description                                             |
-|----------------------------|---------------------------------------------------------|
-| /                          | home page, no functionality                             |
-| /publisher/start           | start publishing messages                               |
-| /publisher/stop            | stop publishing messages                                |
-| /publisher/pause           | pause publishing messages                               |
-| /publisher/resume          | resume publishing messages                              |
-| /publisher/lowersleep      | decrease time between publishing messages by one second |
-| /publisher/raisesleep      | increase time between publishing messages by one second |
-| /publisher/lowermessages   | reduce messages per publish by one                      |
-| /publisher/raisemessages   | increase messages per publish by one                    |
-| /publisher/lowerfillersize | decrease byte size of filler by 512                     |
-| /publisher/raisefillersize | increase byte size of filler by 512                     |
-| /consumer/start            | start consuming messages                                |
-| /consumer/stop             | stop consuming messages                                 |
-| /consumer/pause            | pause consuming messages                                |
-| /consumer/resume           | resume consuming messages                               |
+| Endpoint                    | Description                                                |
+|-----------------------------|------------------------------------------------------------|
+| /                           | home page, no functionality                                |
+| /publisher/start            | start publishing messages                                  |
+| /publisher/stop             | stop publishing messages                                   |
+| /publisher/pause            | pause publishing messages                                  |
+| /publisher/resume           | resume publishing messages                                 |
+| /publisher/lowersleep       | decrease time between publishing messages by one second    |
+| /publisher/raisesleep       | increase time between publishing messages by one second    |
+| /publisher/lowermessages    | reduce messages per publish by one                         |
+| /publisher/raisemessages    | increase messages per publish by one                       |
+| /publisher/lowerfillersize  | decrease byte size of filler by 512                        |
+| /publisher/raisefillersize  | increase byte size of filler by 512                        |
+| /consumer/start             | start consuming messages                                   |
+| /consumer/stop              | stop consuming messages                                    |
+| /consumer/pause             | pause consuming messages                                   |
+| /consumer/resume            | resume consuming messages                                  |
+| /consumer/stats             | display message time for each message                      |
+| /consumer/histogram         | display a table with number of messages in each time range |
 
 The publisher and consumer will create a new thread that will independently process
 and create/consume messages from the web server capability.

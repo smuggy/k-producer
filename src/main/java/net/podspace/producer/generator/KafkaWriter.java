@@ -23,7 +23,7 @@ public class KafkaWriter implements MessageWriter{
         CompletableFuture<SendResult<String, String>> future = kafkaTemplate.send(topicName, message);
         future.whenComplete((result, ex) -> {
             if (ex == null) {
-                logger.info("Sent message=[" + message +
+                logger.debug("Sent message=[" + message +
                         "] with offset=[" + result.getRecordMetadata().offset() + "]");
             } else {
                 logger.info("Unable to send message=[" +

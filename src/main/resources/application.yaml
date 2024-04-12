@@ -20,7 +20,7 @@ management:
 ---
 myapp:
   val: ooh
-  messenger: queue
+  messenger: kafka
   kafka:
     topicName: test-topic-one
     groupId: test-group-id

@@ -129,6 +129,7 @@ public class ConsumerController {
         }
 
         sb.append("</table>");
+        sb.append("<p>Average is: ").append(average()).append("</p>");
         return sb.toString();
     }
 
@@ -144,18 +145,12 @@ public class ConsumerController {
         }
         @Override
         public String toString() {
-            StringBuilder sb = new StringBuilder();
-            sb.append(upper).append("\t").append(count).append("\n");
-            return sb.toString();
+            return upper + "\t" + count + "\n";
         }
     }
     private static class ItemStatComparator implements Comparator<ItemStat> {
         public int compare(ItemStat one, ItemStat two) {
-            if (one.timeDifference < two.timeDifference)
-                return -1;
-            if (one.timeDifference > two.timeDifference)
-                return 1;
-            return 0;
+            return Double.compare(one.timeDifference, two.timeDifference);
         }
     }
     private List<HistogramEntry> getHistogram() {
@@ -181,5 +176,12 @@ public class ConsumerController {
             }
         }
         return l;
+    }
+    private double average() {
+        double total = 0;
+        for (ItemStat i: list.subList(1,list.size()))
+            total += i.timeDifference;
+
+        return total / (list.size()-1);
     }
 }

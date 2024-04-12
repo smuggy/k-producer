@@ -23,7 +23,7 @@ public class KafkaReader implements MessageReader{
 
     public List<String> readMessage() {
         List<String> ret = new ArrayList<>();
-        logger.info("Listening for message.");
+        logger.debug("Listening for message.");
 
         ConsumerRecords<String,String> records = consumer.poll(Duration.ofSeconds(10));
         for (ConsumerRecord<String, String> r : records) {
