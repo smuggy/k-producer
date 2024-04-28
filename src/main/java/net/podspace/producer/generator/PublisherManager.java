@@ -2,12 +2,20 @@ package net.podspace.producer.generator;
 
 public interface PublisherManager {
     void resume();
+
     void pause();
+
     void quit();
-    void setSleep(long seconds);
+
     long getSleep();
-    void setMessages(long count);
+
+    void setSleep(long seconds);
+
     long getMessages();
-    void setFillerSize(int size);
+
+    void setMessages(long count);
+
     int getFillerSize();
+
+    void setFillerSize(int size);
 }

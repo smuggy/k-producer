@@ -18,8 +18,14 @@ public class QueueManager implements MessageWriter, MessageReader {
     public QueueManager() {
         queue = new ArrayBlockingQueue<>(size);
     }
+
+    public static void setSize(int size) {
+        if (size > 0)
+            QueueManager.size = size;
+    }
+
     public void writeMessage(String message) {
-        logger.info("Writing message: " + message);
+        logger.info("Writing message: {}", message);
         while (true) {
             try {
                 if (queue.offer(message, SLEEP_TIME, TimeUnit.SECONDS)) {
@@ -28,7 +34,7 @@ public class QueueManager implements MessageWriter, MessageReader {
                 } else {
                     logger.debug("Failed to offer, try again.");
                 }
-            } catch (InterruptedException ie){
+            } catch (InterruptedException ie) {
                 logger.info("Write loop interrupted.", ie);
                 break;
             }
@@ -38,7 +44,7 @@ public class QueueManager implements MessageWriter, MessageReader {
     public List<String> readMessage() {
         List<String> ret = new ArrayList<>();
         logger.info("read message");
-        while(true) {
+        while (true) {
             try {
                 String message = queue.poll(SLEEP_TIME, TimeUnit.SECONDS);
                 if (message != null) {
@@ -47,17 +53,13 @@ public class QueueManager implements MessageWriter, MessageReader {
                     break;
                 } else {
                     logger.info("Null value on queue");
-                    logger.info("queue size is: " + queue.size());
+                    logger.info("queue size is: {}", queue.size());
                 }
-            } catch (InterruptedException ie){
+            } catch (InterruptedException ie) {
                 logger.info("Read loop interrupted", ie);
                 break;
             }
         }
         return ret;
-    }
-    public static void setSize(int size) {
-        if (size > 0)
-            QueueManager.size = size;
     }
 }

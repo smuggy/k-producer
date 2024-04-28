@@ -1,13 +1,10 @@
 package net.podspace.test;
 
-import net.podspace.producer.ConsumerController;
-
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 
 public class TestApp {
@@ -17,19 +14,20 @@ public class TestApp {
 
     private static final List<Double> ld = new ArrayList<>();
 
-    public static void main(String [] args) {
+    public static void main(String[] args) {
         System.out.println("hello world.");
         var n = LocalDateTime.now();
         System.out.println(n.format(formatter_two));
         try {
             Thread.sleep(3_000);
-        } catch (InterruptedException ignored) {}
+        } catch (InterruptedException ignored) {
+        }
         LocalDateTime current = LocalDateTime.now();
         System.out.println(current.format(formatter_two));
         Duration d = Duration.between(n, current);
         System.out.println(d.toSeconds());
-        System.out.println(d.getNano()/1_000);
-        double mm = d.toSeconds() + ((double)d.getNano())/1_000_000_000.00;
+        System.out.println(d.getNano() / 1_000);
+        double mm = d.toSeconds() + ((double) d.getNano()) / 1_000_000_000.00;
         System.out.println(mm);
 
         ld.add(3.14);
@@ -52,34 +50,16 @@ public class TestApp {
         System.out.println(histogram);
     }
 
-    private static class HistogramEntry {
-        double upper;
-        int count;
-        HistogramEntry(double upper) {
-            this.upper = upper;
-            this.count = 0;
-        }
-        void increment() {
-            this.count++;
-        }
-        @Override
-        public String toString() {
-            StringBuilder sb = new StringBuilder();
-            sb.append(upper).append("\t").append(count).append("\n");
-            return sb.toString();
-        }
-    }
-
     private static List<HistogramEntry> getHistogram() {
         List<HistogramEntry> l = new ArrayList<>(21);
         var max = Collections.max(ld);
         var spread = max / 20;
         System.err.println("Max is: " + max);
         System.err.println("Spread is: " + spread);
-        for (int j=0; j<21; j++) {
-            l.add(new HistogramEntry(spread  * j + spread));
+        for (int j = 0; j < 21; j++) {
+            l.add(new HistogramEntry(spread * j + spread));
         }
-        for (var i: ld) {
+        for (var i : ld) {
             int location = (int) (i / spread);
             System.err.println(location);
             if (l.get(location).upper >= i)
@@ -87,6 +67,26 @@ public class TestApp {
             else
                 l.get(location + 1).increment();
         }
+
         return l;
+    }
+
+    private static class HistogramEntry {
+        double upper;
+        int count;
+
+        HistogramEntry(double upper) {
+            this.upper = upper;
+            this.count = 0;
+        }
+
+        void increment() {
+            this.count++;
+        }
+
+        @Override
+        public String toString() {
+            return upper + "\t" + count + "\n";
+        }
     }
 }

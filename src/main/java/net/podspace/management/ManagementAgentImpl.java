@@ -21,7 +21,7 @@ public class ManagementAgentImpl implements ManagementAgent {
     @Override
     public void addBean(MBeanContainer bean) {
         ObjectName objectName;
-        logger.info("Adding management for: " + bean.objectName());
+        logger.info("Adding management for: {}", bean.objectName());
         try {
             String name = "net.podspace.jmx:type=KPAgent," + bean.objectName();
             objectName = new ObjectName(name);
@@ -39,7 +39,7 @@ public class ManagementAgentImpl implements ManagementAgent {
     @Override
     public void removeBean(MBeanContainer bean) {
         ObjectName objectName;
-        logger.debug("Removing management for " + bean.objectName());
+        logger.debug("Removing management for {}", bean.objectName());
         try {
             objectName = new ObjectName("net.podspace.jmx:type=KPAgent," + bean.objectName());
             mbeanServer.unregisterMBean(objectName);

@@ -11,9 +11,9 @@ import java.util.UUID;
  * This class represents the temperature at a moment in time.
  */
 
-public class Temperature implements Comparable<Temperature>{
+public class Temperature implements Comparable<Temperature> {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
-
+    private static int fillerSize = 0;
     @JsonProperty("scale")
     private TempScale scale;
     @JsonProperty("time")
@@ -24,16 +24,10 @@ public class Temperature implements Comparable<Temperature>{
     private String timeId;
     @JsonProperty("filler")
     private String filler;
-    private static int fillerSize = 0;
 
-    public static Temperature createCelsiusTemp(double temp) {
-        return new Temperature(temp, TempScale.CELSIUS);
-    }
-    public static Temperature createFahrenheitTemp(double temp) {
-        return new Temperature(temp, TempScale.FAHRENHEIT);
+    public Temperature() {
     }
 
-    public Temperature(){}
     Temperature(double temp, TempScale scale) {
         this.temp = temp;
         this.time = LocalDateTime.now().format(formatter);
@@ -41,9 +35,30 @@ public class Temperature implements Comparable<Temperature>{
         this.timeId = UUID.randomUUID().toString();
     }
 
+    public static Temperature createCelsiusTemp(double temp) {
+        return new Temperature(temp, TempScale.CELSIUS);
+    }
+
+    public static Temperature createFahrenheitTemp(double temp) {
+        return new Temperature(temp, TempScale.FAHRENHEIT);
+    }
+
+    public static int getFillerSize() {
+        return fillerSize;
+    }
+
+    public static void setFillerSize(int size) {
+        if (size < 0) {
+            fillerSize = 0;
+        } else {
+            fillerSize = Math.min(size, 1_000_000);
+        }
+    }
+
     public String getTimeId() {
         return timeId;
     }
+
     public TempScale getScale() {
         return scale;
     }
@@ -56,16 +71,6 @@ public class Temperature implements Comparable<Temperature>{
         return temp;
     }
 
-    public static int getFillerSize() {
-        return fillerSize;
-    }
-    public static void setFillerSize(int size) {
-        if (size < 0) {
-            fillerSize = 0;
-        } else {
-            fillerSize = Math.min(size, 1_000_000);
-        }
-    }
     public String generateFiller() {
         if (fillerSize > 0) {
             int leftLimit = 48; // numeral '0'
@@ -89,6 +94,7 @@ public class Temperature implements Comparable<Temperature>{
                 "\",\"scale\":\"" + scale.getScale() +
                 "\",\"filler\":\"" + generateFiller() + "\"}";
     }
+
     @Override
     public String toString() {
         return toJsonString();

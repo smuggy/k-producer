@@ -25,7 +25,8 @@ myapp:
     topicName: test-topic-one
     groupId: test-group-id
 #    bootstrapAddress: kafka-00:9092,kafka-01:9092,kafka-02:9092
-    bootstrapAddress: 127.0.0.1:9092
+    bootstrapAddress: 192.168.0.60:9092
+#    bootstrapAddress: 127.0.0.1:9092
 #    bootstrapAddress: localhost:9092
 ---
 spring:

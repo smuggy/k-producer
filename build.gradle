@@ -1,11 +1,11 @@
 plugins {
     id 'java'
     id 'application'
-    id 'org.springframework.boot' version '3.2.3'
+    id 'org.springframework.boot' version '3.2.4'
 }
 
 group = 'net.podspace'
-version = '0.2.12'
+version = '0.3.1'
 
 repositories {
     mavenCentral()
@@ -33,23 +33,29 @@ tasks.register("buildDockerImage", Exec) {
     commandLine "docker", "build", "--build-arg", "APP_VERSION=${project.version}", "--tag", "${project.name}:${project.version}", "docker"
 }
 
+tasks.register("tagDockerImage", Exec) {
+    workingDir layout.getBuildDirectory()
+    commandLine "docker", "image", "tag", "${project.name}:${project.version}", "mmckernan/${project.name}:${project.version}"
+}
+
 tasks.register("pushDockerImage", Exec) {
-    commandLine "docker", "push", "${project.name}:${project.version}"
+    commandLine "docker", "push", "mmckernan/${project.name}:${project.version}"
 }
 
 copyTarToDockerDir.dependsOn build
 buildDockerImage.dependsOn prepareDockerDir
 buildDockerImage.dependsOn copyTarToDockerDir
-pushDockerImage.dependsOn buildDockerImage
+tagDockerImage.dependsOn buildDockerImage
+pushDockerImage.dependsOn tagDockerImage
 
 dependencies {
     implementation 'org.slf4j:slf4j-api:1.7.36'
     implementation 'org.apache.logging.log4j:log4j-core:2.22.0'
     implementation 'org.apache.logging.log4j:log4j-layout-template-json:2.22.0'
 
-    implementation 'org.springframework.boot:spring-boot-starter-web:3.2.3'
-    implementation 'org.springframework.boot:spring-boot-starter-log4j2:3.2.3'
-    implementation 'org.springframework.boot:spring-boot-starter-actuator:3.2.3'
+    implementation 'org.springframework.boot:spring-boot-starter-web:3.2.4'
+    implementation 'org.springframework.boot:spring-boot-starter-log4j2:3.2.4'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator:3.2.4'
     implementation 'org.springframework.cloud:spring-cloud-starter-consul-all:4.1.0'
 
     implementation 'org.springframework.kafka:spring-kafka:3.1.1'

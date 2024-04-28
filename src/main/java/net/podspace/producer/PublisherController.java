@@ -16,6 +16,7 @@ public class PublisherController {
     public PublisherController(Publisher publisher) {
         this.publisher = publisher;
     }
+
     @GetMapping("/start")
     public String startPublisher() {
         logger.info("Calling publisher initiate.");
@@ -62,6 +63,7 @@ public class PublisherController {
         logger.info("Woot... resumed.");
         return "Success... resumed";
     }
+
     @GetMapping("/lowersleep")
     public String lowerSleep() {
         try {
@@ -72,9 +74,10 @@ public class PublisherController {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... lowered to " + publisher.getSleep() + " half seconds.");
+        logger.info("Woot... lowered to {} half seconds.", publisher.getSleep());
         return "Success... lowered time";
     }
+
     @GetMapping("/raisesleep")
     public String raiseSleep() {
         try {
@@ -85,9 +88,10 @@ public class PublisherController {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... raised to " + publisher.getSleep() + " half seconds.");
+        logger.info("Woot... raised to {} half seconds.", publisher.getSleep());
         return "Success... raised time";
     }
+
     @GetMapping("/lowermessages")
     public String lowerMessages() {
         try {
@@ -99,9 +103,10 @@ public class PublisherController {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... lowered to " + publisher.getMessages() + " messages.");
+        logger.info("Woot... lowered to {} messages.", publisher.getMessages());
         return "Success... lowered messages";
     }
+
     @GetMapping("/raisemessages")
     public String raiseMessages() {
         try {
@@ -112,9 +117,10 @@ public class PublisherController {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... raised to " + publisher.getMessages() + " messages.");
+        logger.info("Woot... raised to {} messages.", publisher.getMessages());
         return "Success... raised messages";
     }
+
     @GetMapping("/lowerfillersize")
     public String lowerFillerSize() {
         try {
@@ -125,9 +131,10 @@ public class PublisherController {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... lowered filler to " + publisher.getFillerSize() + " bytes.");
+        logger.info("Woot... lowered filler to {} bytes.", publisher.getFillerSize());
         return "Success... lowered filler size";
     }
+
     @GetMapping("/raisefillersize")
     public String raiseFillerSize() {
         try {
@@ -138,18 +145,18 @@ public class PublisherController {
             logger.warn("Error occurred.", t);
             return "Failure... I dunno";
         }
-        logger.info("Woot... raised filler to " + publisher.getFillerSize() + " bytes.");
+        logger.info("Woot... raised filler to {} bytes.", publisher.getFillerSize());
         return "Success... raised filler size";
     }
+
     @GetMapping("/settings")
     public String settings() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<html><head><title>Publisher Settings</title></head><body>");
-        sb.append("<table><tr><th>key</th><th>value</th></tr>");
-        sb.append("<tr><td>Sleep time</td><td>").append(publisher.getSleep()).append("</td></tr>");
-        sb.append("<tr><td>Messages</td><td>").append(publisher.getMessages()).append("</td></tr>");
-        sb.append("<tr><td>Filler size</td><td>").append(publisher.getFillerSize()).append("</td></tr>");
-        sb.append("</table></body></html>");
-        return sb.toString();
+        String sb = "<html><head><title>Publisher Settings</title></head><body>" +
+                "<table><tr><th>key</th><th>value</th></tr>" +
+                "<tr><td>Sleep time</td><td>" + publisher.getSleep() + "</td></tr>" +
+                "<tr><td>Messages</td><td>" + publisher.getMessages() + "</td></tr>" +
+                "<tr><td>Filler size</td><td>" + publisher.getFillerSize() + "</td></tr>" +
+                "</table></body></html>";
+        return sb;
     }
 }

@@ -7,7 +7,7 @@ import org.springframework.kafka.support.SendResult;
 
 import java.util.concurrent.CompletableFuture;
 
-public class KafkaWriter implements MessageWriter{
+public class KafkaWriter implements MessageWriter {
     private static final Logger logger = LoggerFactory.getLogger(KafkaWriter.class);
     private String topicName;
     private KafkaTemplate<String, String> kafkaTemplate;
@@ -15,9 +15,11 @@ public class KafkaWriter implements MessageWriter{
     public void setTopicName(String topicName) {
         this.topicName = topicName;
     }
+
     public void setKafkaTemplate(KafkaTemplate<String, String> kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;
     }
+
     @Override
     public void writeMessage(String message) {
         CompletableFuture<SendResult<String, String>> future = kafkaTemplate.send(topicName, message);

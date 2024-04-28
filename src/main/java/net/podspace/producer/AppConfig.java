@@ -24,8 +24,8 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.kafka.core.*;
 
 import javax.management.NotCompliantMBeanException;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
 
 @Configuration
 public class AppConfig {
@@ -48,7 +48,7 @@ public class AppConfig {
 
     @Bean
     public MyBean beanInstance() {
-        logger.info("==> Creating bean instance with " + val);
+        logger.info("==> Creating bean instance with {}", val);
 
         MyBean m = new MyBean();
         m.setValue(val);
@@ -114,7 +114,7 @@ public class AppConfig {
             logger.info("Creating queue writer.");
             return context.getBean(QueueManager.class);
         }
-        logger.info("Invalid writer '" + messenger + "' using empty writer.");
+        logger.info("Invalid writer '{}' using empty writer.", messenger);
         return emptyWriter();
     }
 
@@ -137,7 +137,7 @@ public class AppConfig {
         if (!messenger.equalsIgnoreCase("kafka"))
             return null;
         Map<String, Object> configProps = new HashMap<>();
-        logger.debug("Producer factory: bootstrap server: " + bootstrapAddress);
+        logger.debug("Producer factory: bootstrap server: {}", bootstrapAddress);
         configProps.put(
                 ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 bootstrapAddress);
@@ -147,7 +147,7 @@ public class AppConfig {
         configProps.put(
                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                 StringSerializer.class);
-        ProducerFactory<String,String> pf = new DefaultKafkaProducerFactory<>(configProps);
+        ProducerFactory<String, String> pf = new DefaultKafkaProducerFactory<>(configProps);
         pf.addListener(new MicrometerProducerListener<>(this.meterRegistry));
         return pf;
     }
@@ -164,7 +164,7 @@ public class AppConfig {
         if (!messenger.equalsIgnoreCase("kafka"))
             return null;
         Map<String, Object> configProps = new HashMap<>();
-        logger.info("Consumer: bootstrap server: " + bootstrapAddress);
+        logger.info("Consumer: bootstrap server: {}", bootstrapAddress);
         configProps.put(
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 bootstrapAddress);
@@ -180,7 +180,7 @@ public class AppConfig {
         configProps.put(
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
                 StringDeserializer.class.getName());
-        ConsumerFactory<String,String> cf =  new DefaultKafkaConsumerFactory<>(configProps);
+        ConsumerFactory<String, String> cf = new DefaultKafkaConsumerFactory<>(configProps);
         cf.addListener(new MicrometerConsumerListener<>(this.meterRegistry));
         return cf;
     }

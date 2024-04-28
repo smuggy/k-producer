@@ -22,21 +22,15 @@ import java.util.concurrent.BlockingQueue;
 @RestController
 @RequestMapping("/consumer")
 public class ConsumerController {
-    private static class ItemStat {
-        String id;
-        double timeDifference;
-        int size;
-    }
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
     private final Watcher<Temperature> watcher;
     private final BlockingQueue<ValueEnvelope<Temperature>> items;
     private final List<ItemStat> list;
-
     public ConsumerController(Watcher<Temperature> watcher) {
-        this.list    = new ArrayList<>();
+        this.list = new ArrayList<>();
         this.watcher = watcher;
-        this.items   = new ArrayBlockingQueue<>(200_000);
+        this.items = new ArrayBlockingQueue<>(200_000);
         this.watcher.setReturnQueue(items);
     }
 
@@ -100,7 +94,7 @@ public class ConsumerController {
             Duration d = Duration.between(writeTime, readTime);
             ItemStat itemStat = new ItemStat();
             itemStat.id = t.getTimeId();
-            itemStat.timeDifference = d.toSeconds() + ((double)d.getNano())/1_000_000.0; //create time difference in milliseconds
+            itemStat.timeDifference = d.toSeconds() + ((double) d.getNano()) / 1_000_000.0; //create time difference in milliseconds
             itemStat.size = i.size;
             list.add(itemStat);
         }
@@ -133,38 +127,18 @@ public class ConsumerController {
         return sb.toString();
     }
 
-    private static class HistogramEntry {
-        double upper;
-        int count;
-        HistogramEntry(double upper) {
-            this.upper = upper;
-            this.count = 0;
-        }
-        void increment() {
-            this.count++;
-        }
-        @Override
-        public String toString() {
-            return upper + "\t" + count + "\n";
-        }
-    }
-    private static class ItemStatComparator implements Comparator<ItemStat> {
-        public int compare(ItemStat one, ItemStat two) {
-            return Double.compare(one.timeDifference, two.timeDifference);
-        }
-    }
     private List<HistogramEntry> getHistogram() {
         List<HistogramEntry> l = new ArrayList<>(21);
         if (list == null || list.isEmpty()) {
             return l;
         }
-        var max = Collections.max(list.subList(1,list.size()), new ItemStatComparator());
+        var max = Collections.max(list.subList(1, list.size()), new ItemStatComparator());
         var spread = max.timeDifference / 20;
 
-        for (int j=0; j<21; j++) {
-            l.add(new HistogramEntry(spread  * j + spread));
+        for (int j = 0; j < 21; j++) {
+            l.add(new HistogramEntry(spread * j + spread));
         }
-        for (ItemStat i: list.subList(1,list.size())) {
+        for (ItemStat i : list.subList(1, list.size())) {
             int location = (int) (i.timeDifference / spread);
             if (l.get(location).upper >= i.timeDifference)
                 l.get(location).increment();
@@ -177,11 +151,43 @@ public class ConsumerController {
         }
         return l;
     }
+
     private double average() {
         double total = 0;
-        for (ItemStat i: list.subList(1,list.size()))
+        for (ItemStat i : list.subList(1, list.size()))
             total += i.timeDifference;
 
-        return total / (list.size()-1);
+        return total / (list.size() - 1);
+    }
+
+    private static class ItemStat {
+        String id;
+        double timeDifference;
+        int size;
+    }
+
+    private static class HistogramEntry {
+        double upper;
+        int count;
+
+        HistogramEntry(double upper) {
+            this.upper = upper;
+            this.count = 0;
+        }
+
+        void increment() {
+            this.count++;
+        }
+
+        @Override
+        public String toString() {
+            return upper + "\t" + count + "\n";
+        }
+    }
+
+    private static class ItemStatComparator implements Comparator<ItemStat> {
+        public int compare(ItemStat one, ItemStat two) {
+            return Double.compare(one.timeDifference, two.timeDifference);
+        }
     }
 }

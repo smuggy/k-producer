@@ -9,13 +9,13 @@ import java.util.concurrent.TimeUnit;
 
 public class Publisher implements Runnable, PublisherManager {
     private static final Logger logger = LoggerFactory.getLogger(Publisher.class);
+    private final MessageGenerator generator;
+    private final MessageWriter writer;
     private long halfSeconds;
     private boolean pause;
     private boolean started;
     private boolean quit;
     private long messages;
-    private final MessageGenerator generator;
-    private final MessageWriter writer;
     private ExecutorService pool;
 
     public Publisher(MessageGenerator generator, MessageWriter writer) {
@@ -29,36 +29,43 @@ public class Publisher implements Runnable, PublisherManager {
     public void resume() {
         pause = false;
     }
+
     public void pause() {
         pause = true;
     }
+
     public void quit() {
         logger.info("In quit method...");
         quit = true;
         teardown();
         logger.info("torn down...");
     }
+
+    public long getSleep() {
+        return this.halfSeconds;
+    }
+
     public void setSleep(long halfSeconds) {
         if (halfSeconds < 0) this.halfSeconds = 5;
         else if (halfSeconds == 0) this.halfSeconds = 1;
         else this.halfSeconds = halfSeconds;
     }
-    public long getSleep() {
-        return this.halfSeconds;
+
+    public int getFillerSize() {
+        return generator.getFillerSize();
     }
+
     public void setFillerSize(int size) {
         generator.setFillerSize(size);
     }
-    public int getFillerSize() {
-        return generator.getFillerSize();
+
+    public long getMessages() {
+        return messages;
     }
 
     public void setMessages(long count) {
         if (count < 1) this.messages = 1;
         else this.messages = count;
-    }
-    public long getMessages() {
-        return messages;
     }
 
     public void initiate() {
@@ -78,8 +85,9 @@ public class Publisher implements Runnable, PublisherManager {
     public void teardown() {
         try {
             quit = true;
-            if (! started) {
+            if (!started) {
                 logger.info("teardown: not started, leaving");
+                return;
             }
             if (pool == null) {
                 logger.info("teardown: pool null");
@@ -95,7 +103,8 @@ public class Publisher implements Runnable, PublisherManager {
             quit = false;
             started = false;
             pause = false;
-        } catch(InterruptedException ignored) {}
+        } catch (InterruptedException ignored) {
+        }
         logger.info("teardown: generator thread shut down.");
     }
 
@@ -113,17 +122,19 @@ public class Publisher implements Runnable, PublisherManager {
                 logger.info("streaming paused...");
                 try {
                     Thread.sleep(10_000);
-                } catch (InterruptedException ignored) {}
+                } catch (InterruptedException ignored) {
+                }
                 continue;
             }
 
-            for (long i=0; i<this.messages; i++) {
+            for (long i = 0; i < this.messages; i++) {
                 String message = generator.createMessage();
                 writer.writeMessage(message);
             }
             try {
                 Thread.sleep(halfSeconds * 500);
-            } catch (InterruptedException ignored) {}
+            } catch (InterruptedException ignored) {
+            }
         }
     }
 }

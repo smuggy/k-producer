@@ -15,12 +15,12 @@ import java.util.concurrent.TimeUnit;
 public class Watcher<T extends Comparable<T>> implements Runnable {
     private static final Logger logger = LoggerFactory.getLogger(Watcher.class);
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
+    private final MessageConsumer<T> consumer;
+    private final MessageReader reader;
     private boolean started;
     private boolean quit;
     private boolean pause;
     private ExecutorService pool;
-    private final MessageConsumer<T> consumer;
-    private final MessageReader reader;
     private BlockingQueue<ValueEnvelope<T>> items;
 
     public Watcher(MessageConsumer<T> c, MessageReader r) {
@@ -33,6 +33,7 @@ public class Watcher<T extends Comparable<T>> implements Runnable {
     public void setReturnQueue(BlockingQueue<ValueEnvelope<T>> queue) {
         this.items = queue;
     }
+
     public void resume() {
         pause = false;
     }
@@ -113,7 +114,7 @@ public class Watcher<T extends Comparable<T>> implements Runnable {
                 for (String mess : list) {
                     Optional<Pair<T, Integer>> val = consumer.getMessage(mess);
                     if (val.isPresent()) {
-                        logger.debug("Value is: " + val.get());
+                        logger.debug("Value is: {}", val.get());
                         if (items != null) {
                             ValueEnvelope<T> envelope = new ValueEnvelope<>();
                             envelope.item = val.get().a;
@@ -128,7 +129,7 @@ public class Watcher<T extends Comparable<T>> implements Runnable {
                             logger.info("No queue provided, dropping item.");
                         }
                     } else {
-                        logger.info("No value present or parsable in message: " + mess);
+                        logger.info("No value present or parsable in message: {}", mess);
                     }
                 }
             }
