@@ -41,6 +41,14 @@ public class AppConfig {
     private String messenger;
     @Value("${myapp.kafka.groupId}")
     private String groupId;
+    @Value("${myapp.kafka.acks}")
+    private String acksConfig;
+    @Value("${myapp.publisher.sleep:10}")
+    private int sleepConfig;
+    @Value("${myapp.publisher.fillerSize:0}")
+    private int fillerSize;
+    @Value("${myapp.publisher.messageCount:1}")
+    private int messageCount;
     @Autowired
     private ApplicationContext context;
     @Autowired
@@ -147,6 +155,7 @@ public class AppConfig {
         configProps.put(
                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                 StringSerializer.class);
+        configProps.put(ProducerConfig.ACKS_CONFIG, acksConfig);
         ProducerFactory<String, String> pf = new DefaultKafkaProducerFactory<>(configProps);
         pf.addListener(new MicrometerProducerListener<>(this.meterRegistry));
         return pf;
@@ -190,7 +199,9 @@ public class AppConfig {
     public Publisher publisher(MessageWriter messageWriter) {
         var producer = new TemperatureGenerator();
         var publisher = new Publisher(producer, messageWriter);
-        publisher.setSleep(10);
+        publisher.setSleep(sleepConfig);
+        publisher.setFillerSize(fillerSize);
+        publisher.setMessages(messageCount);
         return publisher;
     }
 

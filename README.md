@@ -50,3 +50,14 @@ API provides for the following:
 
 The publisher and consumer will create a new thread that will independently process
 and create/consume messages from the web server capability.
+
+```shell
+./kafka-topics.sh --list --bootstrap-server localhost:9092
+./kafka-topics.sh --create --topic test-topic-one --partitions 1 --replication-factor 2  --bootstrap-server localhost:9092
+./kafka-topics.sh --describe --bootstrap-server localhost:9092
+```
+
+```shell
+export SPRING_PROFILES_ACTIVE=consul
+```
+

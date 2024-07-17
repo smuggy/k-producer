@@ -19,4 +19,6 @@ public class EmptyReader implements MessageReader{
         } catch (InterruptedException ignored){}
         return new ArrayList<>();
     }
+    public void close() {
+    }
 }

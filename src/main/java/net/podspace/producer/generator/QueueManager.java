@@ -62,4 +62,8 @@ public class QueueManager implements MessageWriter, MessageReader {
         }
         return ret;
     }
+
+    @Override
+    public void close() {
+    }
 }

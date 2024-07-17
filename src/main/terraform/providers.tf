@@ -1,7 +1,7 @@
 provider consul {
   address    = "prometheus.podspace.net:443"
   scheme     = "https"
-  token      = ""
+  token      = "10265cbf-f22b-1fdf-b848-9e2d2cd7ecfb"
   datacenter = "us-east-2"
 }
 

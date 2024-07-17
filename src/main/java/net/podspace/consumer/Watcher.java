@@ -97,42 +97,49 @@ public class Watcher<T extends Comparable<T>> implements Runnable {
 
     private void retrieveMessageStream() {
         logger.debug("In retrieve stream method...");
-        while (!quit) {
-            if (pause) {
-                logger.info("retrieving paused...");
-                try {
-                    Thread.sleep(5_000);
-                } catch (InterruptedException ignored) {
+        try {
+            while (!quit) {
+                if (pause) {
+                    logger.info("retrieving paused...");
+                    try {
+                        Thread.sleep(5_000);
+                    } catch (InterruptedException i) {
+                        logger.warn("Exception occurred while paused: ", i);
+                    }
+                    continue;
                 }
-                continue;
-            }
 
-            var list = reader.readMessage();
-            if (list.isEmpty()) {
-                logger.info("No message available... wait again.");
-            } else {
-                for (String mess : list) {
-                    Optional<Pair<T, Integer>> val = consumer.getMessage(mess);
-                    if (val.isPresent()) {
-                        logger.debug("Value is: {}", val.get());
-                        if (items != null) {
-                            ValueEnvelope<T> envelope = new ValueEnvelope<>();
-                            envelope.item = val.get().a;
-                            envelope.size = val.get().b;
-                            envelope.time = LocalDateTime.now().format(formatter);
-                            if (items.offer(envelope)) {
-                                logger.debug("added item to blocking queue.");
+                var list = reader.readMessage();
+                if (list.isEmpty()) {
+                    logger.info("No message available... wait again.");
+                } else {
+                    for (String mess : list) {
+                        Optional<Pair<T, Integer>> val = consumer.getMessage(mess);
+                        if (val.isPresent()) {
+                            logger.debug("Value is: {}", val.get());
+                            if (items != null) {
+                                ValueEnvelope<T> envelope = new ValueEnvelope<>();
+                                envelope.item = val.get().a;
+                                envelope.size = val.get().b;
+                                envelope.time = LocalDateTime.now().format(formatter);
+                                if (items.offer(envelope)) {
+                                    logger.debug("added item to blocking queue.");
+                                } else {
+                                    logger.debug("unable to add item to blocking queue.");
+                                }
                             } else {
-                                logger.debug("unable to add item to blocking queue.");
+                                logger.info("No queue provided, dropping item.");
                             }
                         } else {
-                            logger.info("No queue provided, dropping item.");
+                            logger.info("No value present or parsable in message: {}", mess);
                         }
-                    } else {
-                        logger.info("No value present or parsable in message: {}", mess);
                     }
                 }
             }
+        } catch (Exception e) {
+            logger.error("Exception occurred while retrieving message: ", e);
+        } finally {
+            reader.close();
         }
     }
 }
