@@ -61,3 +61,31 @@ and create/consume messages from the web server capability.
 export SPRING_PROFILES_ACTIVE=consul
 ```
 
+---
+## Statistics
+### Producer side
+* Throughput - 
+* Request latency - time to get ack
+* Retry rate - resilience of producer
+* Error rate - fails after retries
+* Batch size - 
+* Buffer pool utilization - high utilization is generating data faster than it can send
+  * if pool fills up it can cause record drops or throttle performance
+
+### Consumer side
+* Offset or consumer lag - offset between consumer and producer
+  * under provisioned consumers
+* Throughput
+* Commit rate - how frequently commits occur
+* Poll latency - how long to fetch records from broker
+* Rebalance count - 
+
+
+### system wide
+* track offset lag to identify delays in message processing
+* monitor producer throughput to ensure data is sent at expected rate
+* evaluate end-to-end latency for timely delivery of events
+* monitoring error rates to detect serialization or schema issues
+* detect rebalancing events that could affect consumer performance
+
+
