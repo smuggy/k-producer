@@ -12,6 +12,8 @@ import java.util.concurrent.TimeUnit;
 public class QueueManager implements MessageWriter, MessageReader {
     private static final Logger logger = LoggerFactory.getLogger(QueueManager.class);
     private static final long SLEEP_TIME = 30;
+    // TODO: dead code - setSize() is never called, and because the queue is built in the
+    // constructor from this static, calling it after the bean exists would have no effect anyway.
     private static Integer size = 10;
     private final BlockingQueue<String> queue;
 
@@ -26,6 +28,8 @@ public class QueueManager implements MessageWriter, MessageReader {
 
     public void writeMessage(String message) {
         logger.info("Writing message: {}", message);
+        // TODO: bug - mirror of readMessage(): blocks forever once the 10-slot queue fills with no
+        // consumer draining it, so /publisher/stop hangs for the same reason.
         while (true) {
             try {
                 if (queue.offer(message, SLEEP_TIME, TimeUnit.SECONDS)) {
@@ -44,6 +48,11 @@ public class QueueManager implements MessageWriter, MessageReader {
     public List<String> readMessage() {
         List<String> ret = new ArrayList<>();
         logger.info("read message");
+        // TODO: bug - this spins forever while the queue stays empty; it only exits on a message
+        // or an interrupt, and never checks the caller's quit flag. Watcher.teardown() calls
+        // pool.shutdown()/close(), neither of which interrupts a running task, so with
+        // myapp.messenger=queue and no producer running, GET /consumer/stop blocks its request
+        // thread indefinitely. Return an empty list after the poll times out instead.
         while (true) {
             try {
                 String message = queue.poll(SLEEP_TIME, TimeUnit.SECONDS);
@@ -61,9 +70,5 @@ public class QueueManager implements MessageWriter, MessageReader {
             }
         }
         return ret;
-    }
-
-    @Override
-    public void close() {
     }
 }

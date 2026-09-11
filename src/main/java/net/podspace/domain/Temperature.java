@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -13,7 +12,6 @@ import java.util.UUID;
 
 public class Temperature implements Comparable<Temperature> {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
-    private static int fillerSize = 0;
     @JsonProperty("scale")
     private TempScale scale;
     @JsonProperty("time")
@@ -23,7 +21,7 @@ public class Temperature implements Comparable<Temperature> {
     @JsonProperty("id")
     private String timeId;
     @JsonProperty("filler")
-    private String filler;
+    private String filler = "";
 
     public Temperature() {
     }
@@ -43,16 +41,12 @@ public class Temperature implements Comparable<Temperature> {
         return new Temperature(temp, TempScale.FAHRENHEIT);
     }
 
-    public static int getFillerSize() {
-        return fillerSize;
+    public String getFiller() {
+        return filler;
     }
 
-    public static void setFillerSize(int size) {
-        if (size < 0) {
-            fillerSize = 0;
-        } else {
-            fillerSize = Math.min(size, 1_000_000);
-        }
+    public void setFiller(String filler) {
+        this.filler = (filler == null) ? "" : filler;
     }
 
     public String getTimeId() {
@@ -71,28 +65,13 @@ public class Temperature implements Comparable<Temperature> {
         return temp;
     }
 
-    public String generateFiller() {
-        if (fillerSize > 0) {
-            int leftLimit = 48; // numeral '0'
-            int rightLimit = 122; // letter 'z'
-            Random random = new Random();
-
-            return random.ints(leftLimit, rightLimit + 1)
-                    .filter(i -> (i <= 57 || i >= 65) && (i <= 90 || i >= 97))
-                    .limit(fillerSize)
-                    .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
-                    .toString();
-        }
-        return "";
-    }
-
     public String toJsonString() {
         return "{" +
                 "\"id\":\"" + timeId +
                 "\",\"temp\":" + temp +
                 ",\"time\":\"" + time +
                 "\",\"scale\":\"" + scale.getScale() +
-                "\",\"filler\":\"" + generateFiller() + "\"}";
+                "\",\"filler\":\"" + filler + "\"}";
     }
 
     @Override

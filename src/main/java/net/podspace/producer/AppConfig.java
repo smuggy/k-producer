@@ -17,7 +17,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
@@ -39,9 +38,9 @@ public class AppConfig {
     private String bootstrapAddress;//="192.168.1.60:9092";
     @Value("${myapp.messenger}")
     private String messenger;
-    @Value("${myapp.kafka.groupId}")
+    @Value("${myapp.kafka.groupId:default-consumer}")
     private String groupId;
-    @Value("${myapp.kafka.acks}")
+    @Value("${myapp.kafka.acks:0}")
     private String acksConfig;
     @Value("${myapp.publisher.sleep:10}")
     private int sleepConfig;
@@ -49,8 +48,6 @@ public class AppConfig {
     private int fillerSize;
     @Value("${myapp.publisher.messageCount:1}")
     private int messageCount;
-    @Autowired
-    private ApplicationContext context;
     @Autowired
     private MeterRegistry meterRegistry;
 
@@ -120,7 +117,7 @@ public class AppConfig {
         }
         if (messenger.equalsIgnoreCase("queue")) {
             logger.info("Creating queue writer.");
-            return context.getBean(QueueManager.class);
+            return queueManager();
         }
         logger.info("Invalid writer '{}' using empty writer.", messenger);
         return emptyWriter();
@@ -130,11 +127,11 @@ public class AppConfig {
     public MessageReader messageReader() {
         if (messenger.equalsIgnoreCase("queue")) {
             logger.info("Creating queue message reader.");
-            return context.getBean(QueueManager.class);
+            return queueManager();
         }
         if (messenger.equalsIgnoreCase("kafka")) {
             logger.info("Creating kafka message reader.");
-            return context.getBean(KafkaReader.class);
+            return kafkaReader();
         }
         logger.info("Creating empty message reader.");
         return emptyReader();

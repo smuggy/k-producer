@@ -12,9 +12,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -22,13 +25,20 @@ import java.util.concurrent.BlockingQueue;
 @RestController
 @RequestMapping("/consumer")
 public class ConsumerController {
-    private static final Logger logger = LoggerFactory.getLogger(Main.class);
+    private static final Logger logger = LoggerFactory.getLogger(ConsumerController.class);
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
+    private static final Comparator<ItemStat> BY_LATENCY = Comparator.comparingDouble(i -> i.timeDifference);
+    private static final int BUCKET_COUNT = 20;
+    /** Cap on retained samples, matching the return queue, so a long run cannot exhaust the heap. */
+    private static final int MAX_SAMPLES = 200_000;
     private final Watcher<Temperature> watcher;
     private final BlockingQueue<ValueEnvelope<Temperature>> items;
-    private final List<ItemStat> list;
+    /** Guarded by {@link #statsLock}; oldest samples are evicted once MAX_SAMPLES is reached. */
+    private final Deque<ItemStat> stats;
+    private final Object statsLock = new Object();
+
     public ConsumerController(Watcher<Temperature> watcher) {
-        this.list = new ArrayList<>();
+        this.stats = new ArrayDeque<>();
         this.watcher = watcher;
         this.items = new ArrayBlockingQueue<>(200_000);
         this.watcher.setReturnQueue(items);
@@ -83,81 +93,141 @@ public class ConsumerController {
 
     @GetMapping("/stats")
     public String statistics() {
+        List<ItemStat> samples = drainAndSnapshot();
+
         StringBuilder sb = new StringBuilder();
-        sb.append("<table><tr><th>time id</th><th>time difference</th><th>size</th></tr>");
-
-        while (!items.isEmpty()) {
-            var i = items.poll();
-            var t = i.item;
-            LocalDateTime readTime = LocalDateTime.parse(i.time, formatter);
-            LocalDateTime writeTime = LocalDateTime.parse(t.getTime(), formatter);
-            Duration d = Duration.between(writeTime, readTime);
-            ItemStat itemStat = new ItemStat();
-            itemStat.id = t.getTimeId();
-            itemStat.timeDifference = d.toSeconds() + ((double) d.getNano()) / 1_000_000.0; //create time difference in milliseconds
-            itemStat.size = i.size;
-            list.add(itemStat);
+        sb.append("<table><tr><th>time id</th><th>time difference (ms)</th><th>size</th></tr>");
+        for (ItemStat t : samples) {
+            sb.append("<tr><td>").append(t.id)
+                    .append("</td><td>").append(String.format("%.3f", t.timeDifference))
+                    .append("</td><td>").append(t.size)
+                    .append("</td></tr>\n");
+            logger.debug("Id: {} milliseconds: {}", t.id, t.timeDifference);
         }
 
-        for (ItemStat t : list) {
-            String message = "Id: " + t.id + " seconds: " + t.timeDifference;
-            String htmlMess = "<tr><td>" + t.id + "</td><td>" + String.format("%.3f", t.timeDifference) + "</td><td>" +
-                    t.size + "</td></tr>";
-            sb.append(htmlMess).append("\n");
-            logger.debug(message);
-        }
-
-        sb.append("</table><p>total messages: ").append(list.size());
+        sb.append("</table><p>total messages: ").append(samples.size());
         return sb.toString();
     }
 
     @GetMapping("/histogram")
     public String histogram() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("<table><tr><th>limit</th><th>count</th></tr>");
-        var buckets = getHistogram();
+        // Drain here too: /histogram used to report nothing unless /stats happened to be called first.
+        List<ItemStat> samples = warmUpTrimmed(drainAndSnapshot());
 
-        for (HistogramEntry e : buckets) {
-            String htmlMess = "<tr><td>" + String.format("%.3f", e.upper) + "</td><td>" + e.count + "</td></tr>";
-            sb.append(htmlMess).append("\n");
+        StringBuilder sb = new StringBuilder();
+        sb.append("<table><tr><th>limit (ms)</th><th>count</th></tr>");
+        for (HistogramEntry e : getHistogram(samples)) {
+            sb.append("<tr><td>").append(String.format("%.3f", e.upper))
+                    .append("</td><td>").append(e.count)
+                    .append("</td></tr>\n");
         }
 
         sb.append("</table>");
-        sb.append("<p>Average is: ").append(average()).append("</p>");
+        sb.append("<p>Average is: ").append(String.format("%.3f", average(samples))).append(" ms</p>");
         return sb.toString();
     }
 
-    private List<HistogramEntry> getHistogram() {
-        List<HistogramEntry> l = new ArrayList<>(21);
-        if (list == null || list.isEmpty()) {
-            return l;
-        }
-        var max = Collections.max(list.subList(1, list.size()), new ItemStatComparator());
-        var spread = max.timeDifference / 20;
-
-        for (int j = 0; j < 21; j++) {
-            l.add(new HistogramEntry(spread * j + spread));
-        }
-        for (ItemStat i : list.subList(1, list.size())) {
-            int location = (int) (i.timeDifference / spread);
-            if (l.get(location).upper >= i.timeDifference)
-                l.get(location).increment();
-            else {
-                if (location < 20)
-                    l.get(location + 1).increment();
-                else
-                    l.get(20).increment();
+    /**
+     * Moves everything currently on the return queue into the retained sample set and returns a
+     * snapshot of it, so callers never iterate the shared collection directly.
+     */
+    private List<ItemStat> drainAndSnapshot() {
+        List<ItemStat> drained = new ArrayList<>();
+        ValueEnvelope<Temperature> envelope;
+        // poll() rather than isEmpty()+poll(): another request thread draining concurrently would
+        // otherwise leave us holding a null.
+        while ((envelope = items.poll()) != null) {
+            ItemStat stat = toStat(envelope);
+            if (stat != null) {
+                drained.add(stat);
             }
         }
-        return l;
+
+        synchronized (statsLock) {
+            stats.addAll(drained);
+            while (stats.size() > MAX_SAMPLES) {
+                stats.pollFirst();
+            }
+            return new ArrayList<>(stats);
+        }
     }
 
-    private double average() {
-        double total = 0;
-        for (ItemStat i : list.subList(1, list.size()))
-            total += i.timeDifference;
+    /** Returns null for any message we cannot derive a latency from, rather than failing the request. */
+    private ItemStat toStat(ValueEnvelope<Temperature> envelope) {
+        Temperature t = envelope.item;
+        // Jackson leaves these null for anything on the topic that is not one of our messages.
+        if (t == null || t.getTime() == null || envelope.time == null) {
+            logger.info("Skipping message with no usable timestamp.");
+            return null;
+        }
+        try {
+            LocalDateTime readTime = LocalDateTime.parse(envelope.time, formatter);
+            LocalDateTime writeTime = LocalDateTime.parse(t.getTime(), formatter);
+            Duration d = Duration.between(writeTime, readTime);
+            ItemStat stat = new ItemStat();
+            stat.id = t.getTimeId();
+            // Whole milliseconds plus the sub-millisecond remainder. The previous
+            // toSeconds() + getNano()/1e6 mixed units and under-reported anything over a second.
+            stat.timeDifference = d.toNanos() / 1_000_000.0;
+            stat.size = envelope.size;
+            return stat;
+        } catch (DateTimeParseException e) {
+            logger.info("Skipping message with unparsable timestamp: {}", t.getTime());
+            return null;
+        }
+    }
 
-        return total / (list.size() - 1);
+    /**
+     * Drops the first sample, whose latency includes consumer start-up and skews the distribution.
+     * Kept only when there is more than one sample to report.
+     */
+    private List<ItemStat> warmUpTrimmed(List<ItemStat> samples) {
+        return samples.size() > 1 ? samples.subList(1, samples.size()) : samples;
+    }
+
+    private List<HistogramEntry> getHistogram(List<ItemStat> samples) {
+        List<HistogramEntry> buckets = new ArrayList<>(BUCKET_COUNT);
+        if (samples.isEmpty()) {
+            return buckets;
+        }
+
+        double max = Collections.max(samples, BY_LATENCY).timeDifference;
+        if (max <= 0) {
+            // Every latency is zero or negative (identical timestamps, or producer/consumer clock
+            // skew). There is no meaningful range to divide, so report a single bucket.
+            HistogramEntry only = new HistogramEntry(max);
+            for (int i = 0; i < samples.size(); i++) {
+                only.increment();
+            }
+            buckets.add(only);
+            return buckets;
+        }
+
+        double spread = max / BUCKET_COUNT;
+        for (int j = 0; j < BUCKET_COUNT; j++) {
+            buckets.add(new HistogramEntry(spread * (j + 1)));
+        }
+        for (ItemStat i : samples) {
+            int location = (int) (i.timeDifference / spread);
+            if (location >= BUCKET_COUNT) {
+                location = BUCKET_COUNT - 1; // the slowest sample lands on the final boundary
+            } else if (location < 0) {
+                location = 0;                // negative latency from clock skew
+            }
+            buckets.get(location).increment();
+        }
+        return buckets;
+    }
+
+    private double average(List<ItemStat> samples) {
+        if (samples.isEmpty()) {
+            return 0.0;
+        }
+        double total = 0;
+        for (ItemStat i : samples) {
+            total += i.timeDifference;
+        }
+        return total / samples.size();
     }
 
     private static class ItemStat {
@@ -182,12 +252,6 @@ public class ConsumerController {
         @Override
         public String toString() {
             return upper + "\t" + count + "\n";
-        }
-    }
-
-    private static class ItemStatComparator implements Comparator<ItemStat> {
-        public int compare(ItemStat one, ItemStat two) {
-            return Double.compare(one.timeDifference, two.timeDifference);
         }
     }
 }

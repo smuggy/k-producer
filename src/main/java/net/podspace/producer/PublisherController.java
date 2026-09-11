@@ -151,6 +151,8 @@ public class PublisherController {
 
     @GetMapping("/settings")
     public String settings() {
+        // TODO: simplification - plain String concatenation stored in a variable named `sb`
+        // (StringBuilder convention); rename or return the expression directly.
         String sb = "<html><head><title>Publisher Settings</title></head><body>" +
                 "<table><tr><th>key</th><th>value</th></tr>" +
                 "<tr><td>Sleep time</td><td>" + publisher.getSleep() + "</td></tr>" +

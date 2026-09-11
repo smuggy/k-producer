@@ -11,11 +11,16 @@ public class Publisher implements Runnable, PublisherManager {
     private static final Logger logger = LoggerFactory.getLogger(Publisher.class);
     private final MessageGenerator generator;
     private final MessageWriter writer;
-    private long halfSeconds;
-    private boolean pause;
+    // Written by request threads (PublisherController / JMX), read by the publisher worker thread.
+    // volatile supplies the happens-before edge so stop/pause are observed, and makes the 64-bit
+    // reads and writes atomic.
+    private volatile long halfSeconds;
+    private volatile boolean pause;
+    private volatile boolean quit;
+    private volatile long messages;
+    // Guarded by the synchronized lifecycle methods below, which serialize the check-then-act on
+    // started and safely publish pool between the starting and stopping request threads.
     private boolean started;
-    private boolean quit;
-    private long messages;
     private ExecutorService pool;
 
     public Publisher(MessageGenerator generator, MessageWriter writer) {
@@ -68,7 +73,7 @@ public class Publisher implements Runnable, PublisherManager {
         else this.messages = count;
     }
 
-    public void initiate() {
+    public synchronized void initiate() {
         if (started) {
             logger.info("already started... leaving");
             return;
@@ -82,7 +87,7 @@ public class Publisher implements Runnable, PublisherManager {
         pool.submit(this);
     }
 
-    public void teardown() {
+    public synchronized void teardown() {
         try {
             quit = true;
             if (!started) {

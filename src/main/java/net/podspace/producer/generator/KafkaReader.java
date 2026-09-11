@@ -4,6 +4,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,11 +39,17 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
 
     @Override
     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-        consumer.commitSync();
+        try {
+            consumer.commitSync(Duration.ofSeconds(5));
+        } catch (KafkaException e) {
+            logger.warn("Failed to commit offsets during rebalance for partitions {}", partitions, e);
+        }
     }
 
     @Override
     public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        // TODO: bug - unconditionally seeks to beginning on every rebalance (not just first
+        // assignment), discarding committed offsets and replaying the whole topic on restarts/rebalances.
         consumer.seekToBeginning(partitions);
     }
     @Override

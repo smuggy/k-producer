@@ -17,9 +17,12 @@ public class Watcher<T extends Comparable<T>> implements Runnable {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
     private final MessageConsumer<T> consumer;
     private final MessageReader reader;
+    // Written by request threads, read by the watcher worker thread; volatile supplies the
+    // happens-before edge so stop/pause are observed.
+    private volatile boolean quit;
+    private volatile boolean pause;
+    // Guarded by the synchronized lifecycle methods below.
     private boolean started;
-    private boolean quit;
-    private boolean pause;
     private ExecutorService pool;
     private BlockingQueue<ValueEnvelope<T>> items;
 
@@ -49,7 +52,7 @@ public class Watcher<T extends Comparable<T>> implements Runnable {
         logger.info("torn down...");
     }
 
-    public void initiate() {
+    public synchronized void initiate() {
         if (started) {
             logger.info("already started... leaving");
             return;
@@ -63,10 +66,12 @@ public class Watcher<T extends Comparable<T>> implements Runnable {
         pool.submit(this);
     }
 
-    public void teardown() {
+    public synchronized void teardown() {
         try {
             quit = true;
             if (!started) {
+                // TODO: bug - missing the `return` that Publisher.teardown() has, so despite the
+                // "leaving" message it falls through and shuts the pool down anyway.
                 logger.info("teardown: not started, leaving");
             }
             if (pool == null) {
@@ -112,33 +117,36 @@ public class Watcher<T extends Comparable<T>> implements Runnable {
                 var list = reader.readMessage();
                 if (list.isEmpty()) {
                     logger.info("No message available... wait again.");
-                } else {
-                    for (String mess : list) {
-                        Optional<Pair<T, Integer>> val = consumer.getMessage(mess);
-                        if (val.isPresent()) {
-                            logger.debug("Value is: {}", val.get());
-                            if (items != null) {
-                                ValueEnvelope<T> envelope = new ValueEnvelope<>();
-                                envelope.item = val.get().a;
-                                envelope.size = val.get().b;
-                                envelope.time = LocalDateTime.now().format(formatter);
-                                if (items.offer(envelope)) {
-                                    logger.debug("added item to blocking queue.");
-                                } else {
-                                    logger.debug("unable to add item to blocking queue.");
-                                }
+                    continue;
+                }
+                for (String mess : list) {
+                    Optional<Pair<T, Integer>> val = consumer.getMessage(mess);
+                    if (val.isPresent()) {
+                        logger.debug("Value is: {}", val.get());
+                        if (items != null) {
+                            ValueEnvelope<T> envelope = new ValueEnvelope<>();
+                            envelope.item = val.get().a;
+                            envelope.size = val.get().b;
+                            envelope.time = LocalDateTime.now().format(formatter);
+                            if (items.offer(envelope)) {
+                                logger.debug("added item to blocking queue.");
                             } else {
-                                logger.info("No queue provided, dropping item.");
+                                logger.debug("unable to add item to blocking queue.");
                             }
                         } else {
-                            logger.info("No value present or parsable in message: {}", mess);
+                            logger.info("No queue provided, dropping item.");
                         }
+                    } else {
+                        logger.info("No value present or parsable in message: {}", mess);
                     }
                 }
             }
         } catch (Exception e) {
             logger.error("Exception occurred while retrieving message: ", e);
         } finally {
+            // TODO: bug - permanently closes the singleton reader's underlying consumer; a later
+            // /consumer/start resubmits the same bean and reader.readMessage() then throws on the
+            // closed consumer, silently no-op'ing further consumption until app restart.
             reader.close();
         }
     }

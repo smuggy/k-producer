@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class EmptyReader implements MessageReader{
-    private static final Logger logger = LoggerFactory.getLogger(EmptyWriter.class);
+    private static final Logger logger = LoggerFactory.getLogger(EmptyReader.class);
     public EmptyReader() {
         logger.info("in empty reader constructor");
     }
@@ -18,7 +18,5 @@ public class EmptyReader implements MessageReader{
             Thread.sleep(Duration.ofSeconds(5));
         } catch (InterruptedException ignored){}
         return new ArrayList<>();
-    }
-    public void close() {
     }
 }
