@@ -26,19 +26,20 @@ public class Temperature implements Comparable<Temperature> {
     public Temperature() {
     }
 
-    Temperature(double temp, TempScale scale) {
+    Temperature(double temp, TempScale scale, String filler) {
         this.temp = temp;
         this.time = LocalDateTime.now().format(formatter);
         this.scale = scale;
         this.timeId = UUID.randomUUID().toString();
+        setFiller(filler);
     }
 
-    public static Temperature createCelsiusTemp(double temp) {
-        return new Temperature(temp, TempScale.CELSIUS);
+    public static Temperature createCelsiusTemp(double temp, String filler) {
+        return new Temperature(temp, TempScale.CELSIUS, filler);
     }
 
-    public static Temperature createFahrenheitTemp(double temp) {
-        return new Temperature(temp, TempScale.FAHRENHEIT);
+    public static Temperature createFahrenheitTemp(double temp, String filler) {
+        return new Temperature(temp, TempScale.FAHRENHEIT, filler);
     }
 
     public String getFiller() {

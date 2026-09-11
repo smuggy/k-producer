@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/publisher")
 public class PublisherController {
-    private static final Logger logger = LoggerFactory.getLogger(Main.class);
+    private static final Logger logger = LoggerFactory.getLogger(PublisherController.class);
     private final Publisher publisher;
 
     public PublisherController(Publisher publisher) {

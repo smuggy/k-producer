@@ -1,6 +1,5 @@
 package net.podspace.management;
 
-
 import java.lang.management.ManagementFactory;
 
 import javax.management.InstanceNotFoundException;
@@ -46,7 +45,5 @@ public class ManagementAgentImpl implements ManagementAgent {
         } catch (Exception ie) {
             logger.info("Exception occurred in management agent impl:", ie);
         }
-
     }
-
 }

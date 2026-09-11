@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 
 public class Watcher<T extends Comparable<T>> implements Runnable {
     private static final Logger logger = LoggerFactory.getLogger(Watcher.class);
+    private static final long SHUTDOWN_WAIT_SECONDS = 10;
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
     private final MessageConsumer<T> consumer;
     private final MessageReader reader;
@@ -70,25 +71,31 @@ public class Watcher<T extends Comparable<T>> implements Runnable {
         try {
             quit = true;
             if (!started) {
-                // TODO: bug - missing the `return` that Publisher.teardown() has, so despite the
-                // "leaving" message it falls through and shuts the pool down anyway.
                 logger.info("teardown: not started, leaving");
+                return;
             }
             if (pool == null) {
                 logger.info("teardown: pool null");
                 return;
             }
             logger.info("teardown: shutting down");
+            // Escalate rather than waiting forever: shutdown() never interrupts, and close()
+            // blocks indefinitely, so a worker parked in a blocking read used to wedge this
+            // request thread permanently.
             pool.shutdown();
-            pool.close();
-            while (!pool.awaitTermination(5L, TimeUnit.MINUTES)) {
-                logger.info("Not yet. Still waiting for termination");
+            if (!pool.awaitTermination(SHUTDOWN_WAIT_SECONDS, TimeUnit.SECONDS)) {
+                logger.info("teardown: worker still running, interrupting it.");
+                pool.shutdownNow();
+                if (!pool.awaitTermination(SHUTDOWN_WAIT_SECONDS, TimeUnit.SECONDS)) {
+                    logger.warn("teardown: worker did not respond to interrupt.");
+                }
             }
 
             quit = false;
             started = false;
             pause = false;
         } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
         }
         logger.info("teardown: generator thread shut down.");
     }

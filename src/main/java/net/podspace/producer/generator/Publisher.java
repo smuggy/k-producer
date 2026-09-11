@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 
 public class Publisher implements Runnable, PublisherManager {
     private static final Logger logger = LoggerFactory.getLogger(Publisher.class);
+    private static final long SHUTDOWN_WAIT_SECONDS = 10;
     private final MessageGenerator generator;
     private final MessageWriter writer;
     // Written by request threads (PublisherController / JMX), read by the publisher worker thread.
@@ -99,16 +100,23 @@ public class Publisher implements Runnable, PublisherManager {
                 return;
             }
             logger.info("teardown: shutting down");
+            // Escalate rather than waiting forever: shutdown() never interrupts, and close()
+            // blocks indefinitely, so a worker parked in a blocking read or write used to wedge
+            // this request thread permanently.
             pool.shutdown();
-            pool.close();
-            while (!pool.awaitTermination(2L, TimeUnit.MINUTES)) {
-                logger.info("Not yet. Still waiting for termination");
+            if (!pool.awaitTermination(SHUTDOWN_WAIT_SECONDS, TimeUnit.SECONDS)) {
+                logger.info("teardown: worker still running, interrupting it.");
+                pool.shutdownNow();
+                if (!pool.awaitTermination(SHUTDOWN_WAIT_SECONDS, TimeUnit.SECONDS)) {
+                    logger.warn("teardown: worker did not respond to interrupt.");
+                }
             }
 
             quit = false;
             started = false;
             pause = false;
         } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
         }
         logger.info("teardown: generator thread shut down.");
     }

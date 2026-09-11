@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class HelloController {
-    private static final Logger logger = LoggerFactory.getLogger(Main.class);
+    private static final Logger logger = LoggerFactory.getLogger(HelloController.class);
     private final MyBean b;
 //    private final static String TOPIC_NAME = "test-topic-one";
 //    private final KafkaTemplate<String, String> kafkaTemplate;

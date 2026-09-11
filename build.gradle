@@ -1,3 +1,5 @@
+import org.springframework.boot.gradle.plugin.SpringBootPlugin
+
 plugins {
     id 'java'
     id 'application'
@@ -5,7 +7,7 @@ plugins {
 }
 
 group = 'net.podspace'
-version = '0.3.4'
+version = '0.4.1'
 
 repositories {
     mavenCentral()
@@ -56,33 +58,39 @@ tagDockerImage.dependsOn buildDockerImage
 pushDockerImage.dependsOn tagDockerImage
 
 dependencies {
-    // TODO: stale pin - Boot's BOM upgrades this to 2.0.16 anyway; the 1.7.x number is misleading
-    // since log4j-slf4j2-impl requires slf4j 2.x. Drop the explicit version.
-    implementation 'org.slf4j:slf4j-api:1.7.36'
+    // Boot's BOM manages versions for everything it knows about (starters, kafka, micrometer,
+    // slf4j, log4j, junit), so those are declared without a version below and stay consistent
+    // with the Boot release. Declaring a version anywhere below is therefore a deliberate
+    // override, not an oversight.
+    // BOM_COORDINATES tracks the applied Boot plugin version, so the two cannot drift.
+    implementation platform(SpringBootPlugin.BOM_COORDINATES)
+    testImplementation platform(SpringBootPlugin.BOM_COORDINATES)
+
+    implementation 'org.slf4j:slf4j-api'
+    // Deliberate override: ahead of the log4j version Boot manages.
     implementation 'org.apache.logging.log4j:log4j-core:2.25.4'
     implementation 'org.apache.logging.log4j:log4j-layout-template-json:2.25.4'
 
-    implementation 'org.springframework.boot:spring-boot-starter-web:3.5.14'
-    implementation 'org.springframework.boot:spring-boot-starter-log4j2:3.5.14'
-    implementation 'org.springframework.boot:spring-boot-starter-actuator:3.5.14'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // Not covered by Boot's BOM - Spring Cloud ships its own release train. Must be kept in step
+    // with the Boot version by hand until the spring-cloud-dependencies BOM is adopted too.
     implementation 'org.springframework.cloud:spring-cloud-starter-consul-all:4.3.3'
 
+    // Deliberate override: one patch ahead of the 3.3.15 Boot 3.5.14 manages.
     implementation 'org.springframework.kafka:spring-kafka:3.3.16'
-    implementation 'org.apache.kafka:kafka-clients:3.9.2'
+    implementation 'org.apache.kafka:kafka-clients'
 
-    // TODO: bug - pinned 1.12.4 is simpleclient-based and incompatible with Boot 3.5.x, which
-    // dropped the simpleclient auto-config; no PrometheusMeterRegistry is created and
-    // /actuator/prometheus returns 404 (verified). Consul discovery advertises that path as
-    // metrics-path. Drop the explicit version so Boot's BOM manages it.
-    implementation 'io.micrometer:micrometer-registry-prometheus:1.12.4'
+    // Version comes from the BOM: pinning this independently is what previously left it on a
+    // simpleclient-based 1.12.x that Boot 3.5 no longer auto-configures, so /actuator/prometheus
+    // returned 404.
+    implementation 'io.micrometer:micrometer-registry-prometheus'
 
-    // TODO: bug (verified) - `./gradlew test` fails outright with "Failed to load JUnit Platform",
-    // so the whole suite silently never runs and `build` fails. Gradle 9 no longer injects the
-    // launcher implicitly. Fix: add `testRuntimeOnly 'org.junit.platform:junit-platform-launcher'`
-    // (confirmed to make the suite run and pass). The 5.9.1 BOM pin also overrides the newer JUnit
-    // that Boot 3.5 manages - consider dropping the explicit version too.
-    testImplementation platform('org.junit:junit-bom:5.9.1')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    // Required on the test runtime classpath: Gradle 9 no longer injects the launcher implicitly,
+    // and without it the test task fails to start and the whole suite silently never runs.
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 configurations.implementation {

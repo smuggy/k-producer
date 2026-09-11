@@ -14,8 +14,7 @@ public class TemperatureGenerator implements MessageGenerator {
     private volatile int fillerSize = 0;
 
     public String createMessage() {
-        Temperature t = Temperature.createCelsiusTemp(RANDOM.nextDouble(100));
-        t.setFiller(generateFiller());
+        Temperature t = Temperature.createCelsiusTemp(RANDOM.nextDouble(100), generateFiller());
         return t.toJsonString();
     }
 

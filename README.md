@@ -88,4 +88,8 @@ export SPRING_PROFILES_ACTIVE=consul
 * monitoring error rates to detect serialization or schema issues
 * detect rebalancing events that could affect consumer performance
 
-
+---
+# New features
+* consumer group?
+* delay in reading... mimic slow consumers
+* add key to kafka message

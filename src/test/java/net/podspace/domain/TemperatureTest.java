@@ -2,35 +2,33 @@ package net.podspace.domain;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import net.podspace.domain.TempScale;
-import net.podspace.domain.Temperature;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 public class TemperatureTest {
     @Test
     public void TestCelsiusCreation() {
-        var temp = Temperature.createCelsiusTemp(33);
-        Assertions.assertEquals(temp.getTemp(), 33);
-        Assertions.assertEquals(temp.getScale(), TempScale.CELSIUS);
+        var temp = Temperature.createCelsiusTemp(33, "");
+        Assertions.assertEquals(33, temp.getTemp());
+        Assertions.assertEquals(TempScale.CELSIUS, temp.getScale());
     }
     @Test
     public void TestFahrenheitCreation() {
-        var temp = Temperature.createFahrenheitTemp(33);
-        Assertions.assertEquals(temp.getTemp(), 33);
-        Assertions.assertEquals(temp.getScale(), TempScale.FAHRENHEIT);
+        var temp = Temperature.createFahrenheitTemp(33, "");
+        Assertions.assertEquals(33, temp.getTemp());
+        Assertions.assertEquals(TempScale.FAHRENHEIT, temp.getScale());
     }
 
     @Test
     public void TestValidJson() {
-        var temp = Temperature.createFahrenheitTemp(33);
-        System.out.println(temp.toJsonString());
+        var temp = Temperature.createFahrenheitTemp(33, "");
+        System.out.print(temp.toJsonString());
         ObjectMapper om = new ObjectMapper();
         try {
-            var newtemp = om.readValue(temp.toJsonString(), Temperature.class);
+            om.readValue(temp.toJsonString(), Temperature.class);
         } catch (JsonProcessingException jme) {
-            System.out.println("Processing exception occurred.");
-            System.out.println(jme);
+            System.out.print("Processing exception occurred.");
+            System.out.print(jme);
             Assertions.fail();
         }
         Assertions.assertTrue(isValidJSON(temp.toJsonString()));
