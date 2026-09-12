@@ -47,6 +47,7 @@ bin/
 # .terraform.lock.hcl is deliberately NOT ignored: HashiCorp recommends committing the
 # provider lock file so every machine and CI run resolves identical provider versions.
 .terraform/
+.terraform.lock.hcl
 terraform.tfstate*
 # Variable files are the usual home for tokens once they move out of providers.tf.
 *.tfvars

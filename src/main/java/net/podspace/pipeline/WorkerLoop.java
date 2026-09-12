@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The start/stop/pause machinery shared by {@link Publisher} and {@link Watcher}: a single worker
@@ -18,8 +19,14 @@ import java.util.concurrent.TimeUnit;
 public final class WorkerLoop {
     private static final Logger logger = LoggerFactory.getLogger(WorkerLoop.class);
     private static final long SHUTDOWN_WAIT_SECONDS = 10;
+    private static final long INITIAL_BACKOFF_MILLIS = 500;
+    private static final long MAX_BACKOFF_MILLIS = 30_000;
 
-    /** One pass of the loop. Allowed to throw: the loop logs and exits rather than dying silently. */
+    /**
+     * One pass of the loop. Allowed to throw: the loop records the failure, backs off and tries
+     * again. A failing iteration must never end the loop - this tool is expected to keep running
+     * through the infrastructure outages it exists to measure.
+     */
     @FunctionalInterface
     public interface Task {
         void runOnce() throws Exception;
@@ -34,6 +41,10 @@ public final class WorkerLoop {
     // edge so that stop and pause are actually observed by the running loop.
     private volatile boolean quit;
     private volatile boolean pause;
+    // Failure state, written by the worker thread and read by anything reporting health.
+    private final AtomicLong totalFailures = new AtomicLong();
+    private volatile int consecutiveFailures;
+    private volatile String lastFailure;
     // Guarded by the synchronized lifecycle methods, which serialize the check-then-act on
     // `started` and safely publish `pool` between the starting and stopping request threads.
     private boolean started;
@@ -110,6 +121,7 @@ public final class WorkerLoop {
 
     private void run() {
         logger.info("{}: loop starting...", name);
+        long backoffMillis = INITIAL_BACKOFF_MILLIS;
         try {
             // The interrupt check makes shutdownNow() effective even before quit is observed.
             while (!quit && !Thread.currentThread().isInterrupted()) {
@@ -120,14 +132,68 @@ public final class WorkerLoop {
                     }
                     continue;
                 }
-                task.runOnce();
+
+                try {
+                    task.runOnce();
+                    backoffMillis = noteSuccess(backoffMillis);
+                } catch (InterruptedException e) {
+                    // teardown() escalated to shutdownNow(); stop rather than retry.
+                    Thread.currentThread().interrupt();
+                    logger.info("{}: interrupted, stopping.", name);
+                    return;
+                } catch (Exception e) {
+                    // Catching inside the loop is the point: a broker going away must not end the
+                    // run, or the tool dies during the very outage it is measuring.
+                    noteFailure(e, backoffMillis);
+                    if (!sleepFor(backoffMillis)) {
+                        return;
+                    }
+                    backoffMillis = Math.min(backoffMillis * 2, MAX_BACKOFF_MILLIS);
+                }
             }
-        } catch (Exception e) {
-            logger.error("{}: loop terminated by exception", name, e);
         } finally {
             onExit.run();
             logger.info("{}: loop done.", name);
         }
+    }
+
+    /** Resets the failure state, logging the transition so recovery is visible and timeable. */
+    private long noteSuccess(long backoffMillis) {
+        if (consecutiveFailures > 0) {
+            logger.info("{}: recovered after {} consecutive failures (last: {}).",
+                    name, consecutiveFailures, lastFailure);
+            consecutiveFailures = 0;
+            lastFailure = null;
+            return INITIAL_BACKOFF_MILLIS;
+        }
+        return backoffMillis;
+    }
+
+    private void noteFailure(Exception e, long backoffMillis) {
+        totalFailures.incrementAndGet();
+        consecutiveFailures++;
+        lastFailure = e.getClass().getSimpleName() + ": " + e.getMessage();
+        logger.error("{}: iteration failed ({} consecutive), retrying in {}ms",
+                name, consecutiveFailures, backoffMillis, e);
+    }
+
+    /** Total failed iterations since this loop object was created. */
+    public long getTotalFailures() {
+        return totalFailures.get();
+    }
+
+    /** Failed iterations since the last success; 0 while healthy. */
+    public int getConsecutiveFailures() {
+        return consecutiveFailures;
+    }
+
+    /** Description of the most recent failure, or null while healthy. */
+    public String getLastFailure() {
+        return lastFailure;
+    }
+
+    public boolean isHealthy() {
+        return consecutiveFailures == 0;
     }
 
     /**

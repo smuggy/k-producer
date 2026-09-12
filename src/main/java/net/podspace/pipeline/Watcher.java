@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.BlockingQueue;
+import java.util.function.Consumer;
 
 public class Watcher<T extends Comparable<T>> {
     private static final Logger logger = LoggerFactory.getLogger(Watcher.class);
@@ -19,19 +19,24 @@ public class Watcher<T extends Comparable<T>> {
     private final MessageConsumer<T> consumer;
     private final MessageReader reader;
     private final WorkerLoop loop;
-    private BlockingQueue<ValueEnvelope<T>> items;
+    /**
+     * Consumes each envelope as it is read, on the watcher thread. Replaces the old hand-off
+     * queue, which buffered up to 200k whole messages and silently discarded samples once full.
+     * Must be quick and must not throw.
+     */
+    private volatile Consumer<ValueEnvelope<T>> sink;
 
     public Watcher(MessageConsumer<T> c, MessageReader r) {
         this.reader = r;
         this.consumer = c;
-        // TODO: bug - closing on exit permanently closes the singleton reader's underlying
-        // consumer; a later /consumer/start resubmits the same bean and reader.readMessage() then
-        // throws on the closed consumer, silently no-op'ing further consumption until app restart.
-        this.loop = new WorkerLoop("watcher", PAUSE_MILLIS, this::pollAndRecord, reader::close);
+        // No exit hook: the reader is a singleton that outlives this loop, so closing it when the
+        // loop stops left a later /consumer/start holding an unusable reader. The container owns
+        // the reader's lifetime and closes it at shutdown (see AppConfig.messageReader).
+        this.loop = new WorkerLoop("watcher", PAUSE_MILLIS, this::pollAndRecord);
     }
 
-    public void setReturnQueue(BlockingQueue<ValueEnvelope<T>> queue) {
-        this.items = queue;
+    public void setSink(Consumer<ValueEnvelope<T>> sink) {
+        this.sink = sink;
     }
 
     public void initiate() {
@@ -68,18 +73,18 @@ public class Watcher<T extends Comparable<T>> {
                 continue;
             }
             logger.debug("Value is: {}", val.get());
-            if (items == null) {
-                logger.info("No queue provided, dropping item.");
+            Consumer<ValueEnvelope<T>> target = sink;
+            if (target == null) {
+                logger.info("No sink provided, dropping item.");
                 continue;
             }
-            ValueEnvelope<T> envelope = new ValueEnvelope<>();
-            envelope.item = val.get().a;
-            envelope.size = val.get().b;
-            envelope.time = LocalDateTime.now().format(formatter);
-            if (items.offer(envelope)) {
-                logger.debug("added item to blocking queue.");
-            } else {
-                logger.debug("unable to add item to blocking queue.");
+            ValueEnvelope<T> envelope = new ValueEnvelope<>(
+                    val.get().a(), LocalDateTime.now().format(formatter), val.get().b());
+            try {
+                target.accept(envelope);
+            } catch (RuntimeException e) {
+                // Never let a sink failure kill the read loop, but do not hide it either.
+                logger.warn("Sink rejected item", e);
             }
         }
     }

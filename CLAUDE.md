@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-k-producer is a Spring Boot utility for load-testing Kafka. It runs as both a producer and consumer of small JSON "temperature" messages, exposing REST endpoints to control message rate/size/count at runtime and to inspect end-to-end latency between message creation and consumption. See README.md for the full endpoint table and message format.
+k-producer is a Spring Boot probe for exercising and measuring a Kafka cluster. It produces and consumes small JSON "temperature" messages, exposing REST endpoints to vary message rate, size and batch count at runtime, and reporting results as Prometheus metrics. Intended uses include measuring broker and client latency, measuring latency across availability zones (via the `origin`/`echo` roles), and observing behaviour and recovery during broker or infrastructure failures — so **it is expected to keep running through outages**, which is why `WorkerLoop` retries rather than exiting. See README.md for the endpoint table and message format.
 
 ## Common commands
 
@@ -26,6 +26,21 @@ Docker/deploy chain (Gradle tasks in `build.gradle`, run in this dependency orde
 
 ## Architecture
 
+### Package layout
+
+Packages are organised by role in the pipeline, not by producer/consumer direction:
+
+| Package | Contents |
+|---|---|
+| `net.podspace` | `Main` — must stay in the root package so component scanning reaches every subpackage |
+| `config` | `AppConfig` (all bean wiring, role/topic resolution), `SingleInstanceGuard`, `MyBean` |
+| `web` | the three `@RestController`s |
+| `messaging` | the transport SPI: `MessageReader`, `MessageWriter`, `MessageGenerator`, `MessageConsumer`, `Pair` |
+| `messaging.kafka` / `.queue` / `.noop` | SPI implementations |
+| `pipeline` | `WorkerLoop`, `Publisher`, `Watcher`, `Relay`, `PublisherManager`, `ValueEnvelope` |
+| `domain` | `Temperature`, `TempScale`, and their generator/consumer |
+| `management` | JMX agent |
+
 ### Reader/Writer abstraction
 
 The app is built around two small interface pairs that decouple message transport from message content:
@@ -33,14 +48,39 @@ The app is built around two small interface pairs that decouple message transpor
 - `MessageWriter.writeMessage(String)` / `MessageReader.readMessage(): List<String>` — the transport. Implementations: `KafkaWriter`/`KafkaReader` (real Kafka via `spring-kafka`), `QueueManager` (in-memory `BlockingQueue`, implements both interfaces, used for local testing without Kafka), `ConsoleWriter`/`EmptyWriter`/`EmptyReader` (no-op transports).
 - `MessageGenerator.createMessage(): String` / `MessageConsumer<T>.getMessage(String): Optional<Pair<T,Integer>>` — the payload. Currently only `Temperature`/`TemperatureGenerator`/`TemperatureConsumer` exist, producing/parsing the JSON temperature reading described in README.md.
 
-Which transport is wired up is controlled entirely by the `myapp.messenger` property (`kafka` | `console` | `queue` | anything else → empty no-op), read in `AppConfig`. All the `@Bean` methods for readers/writers/factories in `AppConfig` branch on this value — when adding a new transport, follow that same pattern rather than introducing conditional logic elsewhere.
+Which transport is wired up is controlled entirely by the `myapp.messenger` property (`kafka` | `console` | `queue` | anything else → empty no-op), read in `AppConfig.messageWriter()` / `messageReader()`. Those two are the **only** beans of their types; the per-transport objects and the Kafka factories are plain private methods, deliberately not beans — exposing them as `@Bean` previously forced them to return `null` outside kafka mode and made by-type lookups ambiguous. `QueueManager` is the exception: it must stay a `@Bean` because it implements both interfaces and the writer and reader must share one instance.
 
-### Producer/consumer runtime loops
+### Runtime loops
 
-- `Publisher` (implements `Runnable` + `PublisherManager` for JMX) drives message generation: runs on a single-thread `ExecutorService`, loops calling `generator.createMessage()` / `writer.writeMessage()` at a configurable interval (`halfSeconds` — note the API is in half-second units, exposed via `/publisher/lowersleep`/`raisesleep` etc.), with `pause`/`quit` flags checked each loop iteration.
-- `Watcher<T>` is the consumer-side mirror: loops calling `reader.readMessage()`, parses each message via `MessageConsumer<T>`, and — if a `BlockingQueue<ValueEnvelope<T>>` has been set via `setReturnQueue` — pushes a timestamped `ValueEnvelope` for latency measurement.
-- Both classes share the same start/stop/pause/quit/teardown lifecycle shape but do **not** share a common base class or interface; keep that in mind when modifying one — the other needs the equivalent change made independently.
-- `PublisherController` (`/publisher/*`) and `ConsumerController` (`/consumer/*`) are thin REST wrappers around a single injected `Publisher`/`Watcher` bean (both Spring singletons wired in `AppConfig`). `ConsumerController` also owns the latency-tracking `BlockingQueue` and computes `/consumer/stats` and `/consumer/histogram` from it.
+- **`WorkerLoop`** owns all start/stop/pause machinery: the single-thread `ExecutorService`, the `volatile` `quit`/`pause` flags, `synchronized` `initiate()`/`teardown()`, and an escalating shutdown (`shutdown()` → wait → `shutdownNow()`). Both engines delegate to it and supply only a per-iteration body. **Lifecycle fixes belong here, not in the engines** — they each used to carry their own copy, which drifted.
+- `Publisher` supplies `publishBatch()`: emit `messages` messages, then wait `halfSeconds * 500` ms. Note the API is in *half-second* units (`/publisher/lowersleep`/`raisesleep`). It implements `PublisherManager` for JMX.
+- `Watcher<T>` supplies `pollAndRecord()`: read, parse via `MessageConsumer<T>`, and hand a timestamped `ValueEnvelope` to the sink set via `setSink`. The sink runs **on the watcher thread**, so it must be cheap and must not throw. `Watcher` does **not** close the reader — the container owns that (see below).
+- `Relay` supplies `relayBatch()`: forward every message from the reader to the writer **verbatim, without deserializing**. Re-serializing would rewrite the embedded timestamp and destroy the measurement, and staying at the string level means it relays any payload type.
+- Blocking reads/writes must be **bounded and single-attempt**, leaving retries to the loop: only the loop can see the quit flag. An internal retry loop in a reader or writer makes stop hang, since `shutdown()` cannot interrupt.
+- `PublisherController` (`/publisher/*`) and `ConsumerController` (`/consumer/*`) are thin REST wrappers over the `Publisher`/`Watcher` singletons. `ConsumerController` also supplies the watcher's sink: it records each latency into a Micrometer `Timer` (`kproducer.message.latency`, tagged by `role`, exported to `/actuator/prometheus`) and keeps only the last 1,000 samples for `/consumer/stats`. The distribution lives in the Timer — do not reintroduce a buffer of whole messages, which is what previously made this a memory risk and silently dropped samples under load.
+- The `echo` role has no controller: `Relay` starts itself, since it is a pure pump with nothing to tune.
+
+### Roles and the shared-clock constraint (important)
+
+Latency is a subtraction of two timestamps, so **both must come from the same clock** or the result is skew, not latency. Between availability zones the skew routinely exceeds the latency being measured. `myapp.role` (`AppConfig`) decides how that is satisfied:
+
+| Role | Writer topic | Reader topic | Notes |
+|---|---|---|---|
+| `loopback` (default) | `topicName` | `topicName` | one process, one clock; one-way latency |
+| `origin` | `topicName` | `echoTopicName` | round trip, timed on its own clock |
+| `echo` | `echoTopicName` | `topicName` | relay only; `Relay` bean auto-starts |
+
+`AppConfig.writerTopic()`/`readerTopic()` derive the topics from the role — that crossover is the whole mechanism, so be careful editing them.
+
+**Why echo mode exists:** the origin stamps a message and later reads its own stamp back, so a round trip needs **no clock synchronisation at all**. This is the supported way to measure across zones or hosts. Prefer it over trying to discipline clocks.
+
+`loopback` is still single-instance-only: scaling out silently reports skew as latency, and `LocalDateTime` carries no timezone so cross-zone pods can produce wildly wrong or negative values. `SingleInstanceGuard` warns at startup when discovery reports more than one instance, but discovery is only enabled on the `test`/`consul` profiles, so it is best-effort.
+
+**Two amplification guards, both fail fast at startup.** Either would make the relay re-consume its own output without bound:
+1. `echoTopicName` equal to `topicName` (checked in `validateRole()`).
+2. The `echo` role on a transport whose reader and writer are the same object — `messenger=queue` shares one `QueueManager` (checked in the `relay()` bean). The topic check cannot see this case, since no topics are involved.
+
+Anything comparing a produce-side timestamp to a consume-side one inherits the shared-clock constraint. Counting-based checks (delivery reconciliation, per-partition counters) do not — they need no shared clock — but per-sequence gap detection does need one consumer to see the complete sequence stream, which a consumer group spread across instances would not.
 
 ### Configuration (Spring profiles)
 

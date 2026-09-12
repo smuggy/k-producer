@@ -17,6 +17,7 @@ import net.podspace.messaging.noop.EmptyReader;
 import net.podspace.messaging.noop.EmptyWriter;
 import net.podspace.messaging.queue.QueueManager;
 import net.podspace.pipeline.Publisher;
+import net.podspace.pipeline.Relay;
 import net.podspace.pipeline.PublisherManager;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -26,30 +27,48 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Scope;
 import org.springframework.kafka.core.*;
 
+import jakarta.annotation.PostConstruct;
 import javax.management.NotCompliantMBeanException;
 import java.util.HashMap;
 import java.util.Map;
 
 @Configuration
 public class AppConfig {
+    private static final String LOOPBACK = "loopback";
+    private static final String ORIGIN = "origin";
+    private static final String ECHO = "echo";
     private static final Logger logger = LoggerFactory.getLogger(AppConfig.class.getName());
 
     @Value("${myapp.val}")
     private String val;
     @Value("${myapp.kafka.topicName}")
     private String topicName;//="test-topic-one";
+    /** Return topic for echo round trips. Required for the origin and echo roles, unused otherwise. */
+    @Value("${myapp.kafka.echoTopicName:}")
+    private String echoTopicName;
+    /**
+     * loopback - publish and consume the same topic in one process (default, and the only role
+     * whose latency figure is one-way).
+     * origin   - publish to topicName, consume echoTopicName, and measure the full round trip.
+     * echo     - consume topicName and republish to echoTopicName; the far end of a round trip.
+     */
+    @Value("${myapp.role:loopback}")
+    private String role;
     @Value("${myapp.kafka.bootstrapAddress}")
     private String bootstrapAddress;//="192.168.1.60:9092";
     @Value("${myapp.messenger}")
     private String messenger;
     @Value("${myapp.kafka.groupId:default-consumer}")
     private String groupId;
-    @Value("${myapp.kafka.acks:0}")
+    // Defaults to "all" so an environment that omits the key still exercises replication. With
+    // acks=0 the producer does not wait for even a leader acknowledgement, which makes any
+    // durability or delivery check meaningless.
+    @Value("${myapp.kafka.acks:all}")
     private String acksConfig;
     @Value("${myapp.publisher.sleep:10}")
     private int sleepConfig;
@@ -59,6 +78,46 @@ public class AppConfig {
     private int messageCount;
     @Autowired
     private MeterRegistry meterRegistry;
+
+    /**
+     * Fails fast on a role/topic combination that cannot work. The same-topic check matters most:
+     * an echo relay pointed at its own inbound topic re-consumes everything it publishes, which is
+     * an unbounded amplification loop against the cluster under test.
+     */
+    @PostConstruct
+    void validateRole() {
+        if (!isRole(LOOPBACK) && !isRole(ORIGIN) && !isRole(ECHO)) {
+            throw new IllegalStateException("myapp.role must be one of " + LOOPBACK + ", "
+                    + ORIGIN + ", " + ECHO + " but was '" + role + "'");
+        }
+        if (isRole(LOOPBACK)) {
+            return;
+        }
+        if (echoTopicName == null || echoTopicName.isBlank()) {
+            throw new IllegalStateException(
+                    "myapp.kafka.echoTopicName is required for the '" + role + "' role");
+        }
+        if (echoTopicName.equals(topicName)) {
+            throw new IllegalStateException("myapp.kafka.echoTopicName and myapp.kafka.topicName "
+                    + "must differ for the '" + role + "' role, otherwise the relay re-consumes "
+                    + "its own output and amplifies without bound (both are '" + topicName + "')");
+        }
+        logger.info("Role '{}': writing to '{}', reading from '{}'.", role, writerTopic(), readerTopic());
+    }
+
+    private boolean isRole(String candidate) {
+        return candidate.equalsIgnoreCase(role);
+    }
+
+    /** Topic this instance publishes to; the echo role sends the return leg. */
+    private String writerTopic() {
+        return isRole(ECHO) ? echoTopicName : topicName;
+    }
+
+    /** Topic this instance consumes; the origin role listens on the return leg. */
+    private String readerTopic() {
+        return isRole(ORIGIN) ? echoTopicName : topicName;
+    }
 
     @Bean
     public MyBean beanInstance() {
@@ -76,49 +135,22 @@ public class AppConfig {
 //        return new KafkaAdmin(configs);
 //    }
 
+    /**
+     * Shared by the writer and reader in queue mode, so it must stay a {@code @Bean}: the
+     * CGLIB-proxied method returns the same instance to both, whereas a plain method would hand
+     * each side its own queue.
+     */
     @Bean
-    public KafkaWriter kafkaWriter() {
-        if (!messenger.equalsIgnoreCase("kafka"))
-            return null;
-        var writer = new KafkaWriter();
-        writer.setTopicName(topicName);
-        writer.setKafkaTemplate(kafkaTemplate());
-        return writer;
-    }
-
-    @Bean
-    public KafkaReader kafkaReader() {
-        if (!messenger.equalsIgnoreCase("kafka"))
-            return null;
-        return new KafkaReader(consumerFactory(), topicName);
-    }
-
-    @Bean
-    public ConsoleWriter consoleWriter() {
-        return new ConsoleWriter();
-    }
-
-    @Bean
-    public EmptyWriter emptyWriter() {
-        return new EmptyWriter();
-    }
-
-    @Bean
-    public EmptyReader emptyReader() {
-        return new EmptyReader();
-    }
-
-    @Bean
-    @Scope("singleton")
     public QueueManager queueManager() {
         return new QueueManager();
     }
 
+    /** The one and only MessageWriter bean; the per-transport variants below are plain objects. */
     @Bean
     public MessageWriter messageWriter() {
         if (messenger.equalsIgnoreCase("console")) {
             logger.info("Creating console writer.");
-            return consoleWriter();
+            return new ConsoleWriter();
         }
         if (messenger.equalsIgnoreCase("kafka")) {
             logger.info("Creating kafka writer.");
@@ -129,10 +161,15 @@ public class AppConfig {
             return queueManager();
         }
         logger.info("Invalid writer '{}' using empty writer.", messenger);
-        return emptyWriter();
+        return new EmptyWriter();
     }
 
-    @Bean
+    /**
+     * The one and only MessageReader bean. destroyMethod is explicit rather than relying on
+     * Spring's close()/shutdown() inference: this is the single place the reader gets closed, and
+     * the Watcher deliberately no longer does it.
+     */
+    @Bean(destroyMethod = "close")
     public MessageReader messageReader() {
         if (messenger.equalsIgnoreCase("queue")) {
             logger.info("Creating queue message reader.");
@@ -140,16 +177,24 @@ public class AppConfig {
         }
         if (messenger.equalsIgnoreCase("kafka")) {
             logger.info("Creating kafka message reader.");
-            return kafkaReader();
+            return new KafkaReader(consumerFactory(), readerTopic(), meterRegistry);
         }
         logger.info("Creating empty message reader.");
-        return emptyReader();
+        return new EmptyReader();
     }
 
-    @Bean
-    public ProducerFactory<String, String> producerFactory() {
-        if (!messenger.equalsIgnoreCase("kafka"))
-            return null;
+    // The Kafka plumbing below is deliberately NOT exposed as beans. Declaring it as @Bean forced
+    // every method to return null outside kafka mode, which registered NullBeans and made
+    // by-type lookups ambiguous. Nothing outside this class injects these types.
+
+    private KafkaWriter kafkaWriter() {
+        var writer = new KafkaWriter();
+        writer.setTopicName(writerTopic());
+        writer.setKafkaTemplate(new KafkaTemplate<>(producerFactory()));
+        return writer;
+    }
+
+    private ProducerFactory<String, String> producerFactory() {
         Map<String, Object> configProps = new HashMap<>();
         logger.debug("Producer factory: bootstrap server: {}", bootstrapAddress);
         configProps.put(
@@ -167,25 +212,18 @@ public class AppConfig {
         return pf;
     }
 
-    @Bean
-    public KafkaTemplate<String, String> kafkaTemplate() {
-        if (!messenger.equalsIgnoreCase("kafka"))
-            return null;
-        return new KafkaTemplate<>(producerFactory());
-    }
-
-    @Bean
-    public ConsumerFactory<String, String> consumerFactory() {
-        if (!messenger.equalsIgnoreCase("kafka"))
-            return null;
+    private ConsumerFactory<String, String> consumerFactory() {
         Map<String, Object> configProps = new HashMap<>();
         logger.info("Consumer: bootstrap server: {}", bootstrapAddress);
         configProps.put(
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 bootstrapAddress);
-//        configProps.put(
-//                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
-//                "earliest");
+        // Start at the beginning only when this group has no committed offset. This replaces the
+        // seekToBeginning that KafkaReader used to do on every partition assignment, which threw
+        // away committed offsets and replayed the topic on each rebalance.
+        configProps.put(
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+                "earliest");
         configProps.put(
                 ConsumerConfig.GROUP_ID_CONFIG,
                 groupId);
@@ -200,11 +238,12 @@ public class AppConfig {
         return cf;
     }
 
+    // Calling the factory methods directly rather than injecting by type: QueueManager implements
+    // both MessageWriter and MessageReader, so by-type resolution was previously ambiguous.
     @Bean
-    @Scope("singleton")
-    public Publisher publisher(MessageWriter messageWriter) {
+    public Publisher publisher() {
         var producer = new TemperatureGenerator();
-        var publisher = new Publisher(producer, messageWriter);
+        var publisher = new Publisher(producer, messageWriter());
         publisher.setSleep(sleepConfig);
         publisher.setFillerSize(fillerSize);
         publisher.setMessages(messageCount);
@@ -212,10 +251,31 @@ public class AppConfig {
     }
 
     @Bean
-    @Scope("singleton")
-    public Watcher<Temperature> watcher(MessageReader messageReader) {
+    public Watcher<Temperature> watcher() {
         var consumer = new TemperatureConsumer();
-        return new Watcher<>(consumer, messageReader);
+        return new Watcher<>(consumer, messageReader());
+    }
+
+    /**
+     * Only the echo role runs a relay, and it starts itself: it is a pure pump with nothing to
+     * configure at runtime, so a deployed echo instance should just work.
+     */
+    @Bean
+    @ConditionalOnProperty(name = "myapp.role", havingValue = ECHO)
+    public Relay relay() {
+        MessageReader reader = messageReader();
+        MessageWriter writer = messageWriter();
+        // The topic check in validateRole() cannot catch this: with messenger=queue both sides are
+        // the same in-memory QueueManager, so the relay would read its own output straight back
+        // and loop without bound. Distinct endpoints are what make an echo leg meaningful.
+        if (reader == writer) {
+            throw new IllegalStateException("the '" + ECHO + "' role needs a transport with "
+                    + "separate inbound and outbound channels, but messenger '" + messenger
+                    + "' reads and writes the same one");
+        }
+        Relay relay = new Relay(reader, writer, meterRegistry);
+        relay.initiate();
+        return relay;
     }
 
     @Bean

@@ -21,12 +21,19 @@ management:
 myapp:
   val: ooh
   messenger: kafka
+  # loopback | origin | echo. loopback publishes and consumes one topic in this process and
+  # measures one-way latency. origin/echo split that across two instances and two topics so the
+  # round trip is timed on a single clock - see the single-instance note in the README.
+  role: loopback
   publisher:
     messageCount: 5
     sleep: 10
     fillerSize: 512
   kafka:
     topicName: test-topic-one
+    # Return leg for the origin/echo roles; must differ from topicName or the relay would
+    # re-consume its own output. Unused by the loopback role.
+    echoTopicName: test-topic-echo
     groupId: test-group-id
 #    bootstrapAddress: kafka-00:9092,kafka-01:9092,kafka-02:9092
     # TODO: bug - hardcoded LAN IP replacing loopback default breaks local dev for anyone off this network.

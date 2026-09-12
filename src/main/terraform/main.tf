@@ -5,8 +5,10 @@ resource consul_key_prefix app_configuration_ext {
     "server/port"                  = "8090"
     "myapp/val"                    = "tf-val"
     "myapp/messenger"              = "kafka"
+    "myapp/role"                   = "loopback"
     "myapp/kafka/acks"             = "all"
     "myapp/kafka/topicName"        = "test-topic-one"
+    "myapp/kafka/echoTopicName"    = "test-topic-one-echo"
     "myapp/kafka/groupId"          = "test-group-one"
     "myapp/kafka/bootstrapAddress" = "kafka-00:9092,kafka-01:9092,kafka-02:9092"
   }
@@ -22,7 +24,9 @@ resource consul_key_prefix app_configuration_consul {
     "myapp/publisher/sleep"        = 2
     "myapp/publisher/fillerSize"   = 1024
     "myapp/publisher/messageCount" = 100
+    "myapp/role"                   = "loopback"
     "myapp/kafka/topicName"        = "test-topic-three"
+    "myapp/kafka/echoTopicName"    = "test-topic-three-echo"
     "myapp/kafka/groupId"          = "test-group-one"
     "myapp/kafka/acks"             = "all"
     "myapp/kafka/bootstrapAddress" = "kafka-00:9092,kafka-01:9092,kafka-02:9092"
@@ -35,7 +39,9 @@ resource consul_key_prefix app_configuration_other {
     "server/port"                  = "8080"
     "myapp/val"                    = "tf-other-val"
     "myapp/messenger"              = "kafka"
+    "myapp/role"                   = "loopback"
     "myapp/kafka/topicName"        = "test-topic-two"
+    "myapp/kafka/echoTopicName"    = "test-topic-two-echo"
     "myapp/kafka/groupId"          = "test-group-two"
     "myapp/kafka/acks"             = "all"
     "myapp/kafka/bootstrapAddress" = "kafka-00:9092,kafka-01:9092,kafka-02:9092"
