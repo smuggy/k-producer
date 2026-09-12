@@ -35,10 +35,10 @@ API provides for the following:
 | /publisher/stop             | stop publishing messages                                   |
 | /publisher/pause            | pause publishing messages                                  |
 | /publisher/resume           | resume publishing messages                                 |
-| /publisher/lowersleep       | decrease time between publishing messages by one second    |
-| /publisher/raisesleep       | increase time between publishing messages by one second    |
-| /publisher/lowermessages    | reduce messages per publish by one                         |
-| /publisher/raisemessages    | increase messages per publish by one                       |
+| /publisher/lowersleep       | decrease time between publishing messages by a half second |
+| /publisher/raisesleep       | increase time between publishing messages by a half second |
+| /publisher/lowermessages    | reduce messages per publish by five (floor of one)         |
+| /publisher/raisemessages    | increase messages per publish by five                      |
 | /publisher/lowerfillersize  | decrease byte size of filler by 512                        |
 | /publisher/raisefillersize  | increase byte size of filler by 512                        |
 | /consumer/start             | start consuming messages                                   |

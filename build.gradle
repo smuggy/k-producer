@@ -14,7 +14,9 @@ repositories {
 }
 
 application {
-    mainClass = "net.podspace.producer.Main"
+    // Main sits in the root package so @SpringBootApplication component scanning covers every
+    // net.podspace.* subpackage (web, config, ...).
+    mainClass = "net.podspace.Main"
 }
 
 tasks.register("cleanDockerDirTars", Delete) {

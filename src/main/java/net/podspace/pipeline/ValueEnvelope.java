@@ -1,4 +1,4 @@
-package net.podspace.consumer;
+package net.podspace.pipeline;
 
 public class ValueEnvelope<T> {
     public T item;

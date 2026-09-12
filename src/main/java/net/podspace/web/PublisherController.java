@@ -1,6 +1,6 @@
-package net.podspace.producer;
+package net.podspace.web;
 
-import net.podspace.producer.generator.Publisher;
+import net.podspace.pipeline.Publisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -151,14 +151,11 @@ public class PublisherController {
 
     @GetMapping("/settings")
     public String settings() {
-        // TODO: simplification - plain String concatenation stored in a variable named `sb`
-        // (StringBuilder convention); rename or return the expression directly.
-        String sb = "<html><head><title>Publisher Settings</title></head><body>" +
+        return "<html><head><title>Publisher Settings</title></head><body>" +
                 "<table><tr><th>key</th><th>value</th></tr>" +
-                "<tr><td>Sleep time</td><td>" + publisher.getSleep() + "</td></tr>" +
+                "<tr><td>Sleep time (half seconds)</td><td>" + publisher.getSleep() + "</td></tr>" +
                 "<tr><td>Messages</td><td>" + publisher.getMessages() + "</td></tr>" +
                 "<tr><td>Filler size</td><td>" + publisher.getFillerSize() + "</td></tr>" +
                 "</table></body></html>";
-        return sb;
     }
 }

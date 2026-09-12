@@ -1,5 +1,6 @@
-package net.podspace.producer.generator;
+package net.podspace.messaging.kafka;
 
+import net.podspace.messaging.MessageReader;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;

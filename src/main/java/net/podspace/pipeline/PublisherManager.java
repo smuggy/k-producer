@@ -1,4 +1,4 @@
-package net.podspace.producer.generator;
+package net.podspace.pipeline;
 
 public interface PublisherManager {
     void resume();

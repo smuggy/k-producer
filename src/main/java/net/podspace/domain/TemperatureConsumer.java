@@ -2,8 +2,8 @@ package net.podspace.domain;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import net.podspace.consumer.MessageConsumer;
-import net.podspace.consumer.Pair;
+import net.podspace.messaging.MessageConsumer;
+import net.podspace.messaging.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

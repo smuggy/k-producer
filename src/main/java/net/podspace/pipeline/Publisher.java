@@ -1,5 +1,7 @@
-package net.podspace.producer.generator;
+package net.podspace.pipeline;
 
+import net.podspace.messaging.MessageGenerator;
+import net.podspace.messaging.MessageWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

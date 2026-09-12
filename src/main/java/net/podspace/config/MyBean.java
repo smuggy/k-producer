@@ -1,4 +1,4 @@
-package net.podspace.producer;
+package net.podspace.config;
 
 public class MyBean {
     private String value;

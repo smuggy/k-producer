@@ -1,5 +1,7 @@
-package net.podspace.producer.generator;
+package net.podspace.messaging.queue;
 
+import net.podspace.messaging.MessageReader;
+import net.podspace.messaging.MessageWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,8 +13,15 @@ import java.util.concurrent.TimeUnit;
 
 public class QueueManager implements MessageWriter, MessageReader {
     private static final Logger logger = LoggerFactory.getLogger(QueueManager.class);
-    private static final long SLEEP_TIME = 30;
+    /**
+     * Bounds both the read poll and the write offer. Kept short so a stop is observed promptly:
+     * teardown can only interrupt a parked worker after its own escalation delay, so a long
+     * timeout here shows up directly as /consumer/stop and /publisher/stop latency.
+     */
+    private static final long QUEUE_TIMEOUT_SECONDS = 5;
     private static final int MAX_QUEUE_SIZE = 500;
+    /** Caps one read batch independently of queue capacity, so the two can be tuned separately. */
+    private static final int MAX_BATCH_SIZE = 100;
     private final BlockingQueue<String> queue;
 
     public QueueManager() {
@@ -28,8 +37,8 @@ public class QueueManager implements MessageWriter, MessageReader {
     public void writeMessage(String message) {
         logger.debug("Writing message: {}", message);
         try {
-            if (!queue.offer(message, SLEEP_TIME, TimeUnit.SECONDS)) {
-                logger.warn("Queue still full after {}s, dropping message.", SLEEP_TIME);
+            if (!queue.offer(message, QUEUE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                logger.warn("Queue still full after {}s, dropping message.", QUEUE_TIMEOUT_SECONDS);
             }
         } catch (InterruptedException ie) {
             logger.info("Write interrupted, dropping message.");
@@ -46,12 +55,14 @@ public class QueueManager implements MessageWriter, MessageReader {
     public List<String> readMessage() {
         List<String> ret = new ArrayList<>();
         try {
-            String message = queue.poll(SLEEP_TIME, TimeUnit.SECONDS);
+            // poll blocks for at least one message (and paces the caller when the queue is empty);
+            // drainTo then sweeps up whatever else is already waiting without blocking again.
+            String message = queue.poll(QUEUE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             if (message != null) {
                 ret.add(message);
-                queue.drainTo(ret);
+                queue.drainTo(ret, MAX_BATCH_SIZE - ret.size());
             } else {
-                logger.debug("No message available within {}s.", SLEEP_TIME);
+                logger.debug("No message available within {}s.", QUEUE_TIMEOUT_SECONDS);
             }
         } catch (InterruptedException ie) {
             logger.info("Read interrupted, returning what we have.");

@@ -1,4 +1,4 @@
-package net.podspace.producer.generator;
+package net.podspace.messaging;
 
 public interface MessageWriter {
     void writeMessage(String message);

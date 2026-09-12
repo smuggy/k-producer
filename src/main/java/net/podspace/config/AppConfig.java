@@ -1,14 +1,23 @@
-package net.podspace.producer;
+package net.podspace.config;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import net.podspace.consumer.Watcher;
+import net.podspace.pipeline.Watcher;
 import net.podspace.domain.Temperature;
 import net.podspace.domain.TemperatureConsumer;
 import net.podspace.domain.TemperatureGenerator;
 import net.podspace.management.MBeanContainer;
 import net.podspace.management.ManagementAgent;
 import net.podspace.management.ManagementAgentImpl;
-import net.podspace.producer.generator.*;
+import net.podspace.messaging.MessageReader;
+import net.podspace.messaging.MessageWriter;
+import net.podspace.messaging.kafka.KafkaReader;
+import net.podspace.messaging.kafka.KafkaWriter;
+import net.podspace.messaging.noop.ConsoleWriter;
+import net.podspace.messaging.noop.EmptyReader;
+import net.podspace.messaging.noop.EmptyWriter;
+import net.podspace.messaging.queue.QueueManager;
+import net.podspace.pipeline.Publisher;
+import net.podspace.pipeline.PublisherManager;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;

@@ -1,6 +1,6 @@
 package net.podspace.domain;
 
-import net.podspace.producer.generator.MessageGenerator;
+import net.podspace.messaging.MessageGenerator;
 
 import java.util.Random;
 

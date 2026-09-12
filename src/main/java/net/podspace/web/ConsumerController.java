@@ -1,7 +1,7 @@
-package net.podspace.producer;
+package net.podspace.web;
 
-import net.podspace.consumer.ValueEnvelope;
-import net.podspace.consumer.Watcher;
+import net.podspace.pipeline.ValueEnvelope;
+import net.podspace.pipeline.Watcher;
 import net.podspace.domain.Temperature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

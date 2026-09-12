@@ -1,4 +1,4 @@
-package net.podspace.consumer;
+package net.podspace.messaging;
 
 public class Pair<T extends Comparable<T>, U> implements Comparable<Pair<T, U>> {
     public T a;

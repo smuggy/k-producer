@@ -1,6 +1,9 @@
-package net.podspace.consumer;
+package net.podspace.pipeline;
 
-import net.podspace.producer.generator.MessageReader;
+import net.podspace.messaging.MessageConsumer;
+import net.podspace.messaging.MessageReader;
+import net.podspace.messaging.Pair;
+import net.podspace.messaging.MessageReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

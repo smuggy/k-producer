@@ -1,4 +1,4 @@
-package net.podspace.consumer;
+package net.podspace.messaging;
 
 import java.util.Optional;
 
