@@ -8,7 +8,7 @@ public class MyBean {
     }
 
     public void setValue(String value) {
-        System.out.println("==> Setting " + value + " in bean");
+        System.out.print("==> Setting " + value + " in bean\n");
         this.value = value;
     }
 }

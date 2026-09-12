@@ -2,154 +2,86 @@ package net.podspace.pipeline;
 
 import net.podspace.messaging.MessageGenerator;
 import net.podspace.messaging.MessageWriter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-
-public class Publisher implements Runnable, PublisherManager {
-    private static final Logger logger = LoggerFactory.getLogger(Publisher.class);
-    private static final long SHUTDOWN_WAIT_SECONDS = 10;
+public class Publisher implements PublisherManager {
+    private static final long PAUSE_MILLIS = 10_000;
     private final MessageGenerator generator;
     private final MessageWriter writer;
+    private final WorkerLoop loop;
     // Written by request threads (PublisherController / JMX), read by the publisher worker thread.
-    // volatile supplies the happens-before edge so stop/pause are observed, and makes the 64-bit
-    // reads and writes atomic.
+    // volatile supplies the happens-before edge, and makes the 64-bit reads and writes atomic.
     private volatile long halfSeconds;
-    private volatile boolean pause;
-    private volatile boolean quit;
     private volatile long messages;
-    // Guarded by the synchronized lifecycle methods below, which serialize the check-then-act on
-    // started and safely publish pool between the starting and stopping request threads.
-    private boolean started;
-    private ExecutorService pool;
 
     public Publisher(MessageGenerator generator, MessageWriter writer) {
         this.generator = generator;
         this.writer = writer;
         this.messages = 1;
         this.halfSeconds = 10;
-        this.started = false;
+        this.loop = new WorkerLoop("publisher", PAUSE_MILLIS, this::publishBatch);
     }
 
-    public void resume() {
-        pause = false;
+    public void initiate() {
+        loop.initiate();
     }
 
-    public void pause() {
-        pause = true;
+    public void teardown() {
+        loop.teardown();
     }
 
+    @Override
     public void quit() {
-        logger.info("In quit method...");
-        quit = true;
-        teardown();
-        logger.info("torn down...");
+        loop.teardown();
     }
 
+    @Override
+    public void pause() {
+        loop.pause();
+    }
+
+    @Override
+    public void resume() {
+        loop.resume();
+    }
+
+    @Override
     public long getSleep() {
         return this.halfSeconds;
     }
 
+    @Override
     public void setSleep(long halfSeconds) {
         if (halfSeconds < 0) this.halfSeconds = 5;
         else if (halfSeconds == 0) this.halfSeconds = 1;
         else this.halfSeconds = halfSeconds;
     }
 
+    @Override
     public int getFillerSize() {
         return generator.getFillerSize();
     }
 
+    @Override
     public void setFillerSize(int size) {
         generator.setFillerSize(size);
     }
 
+    @Override
     public long getMessages() {
         return messages;
     }
 
+    @Override
     public void setMessages(long count) {
         if (count < 1) this.messages = 1;
         else this.messages = count;
     }
 
-    public synchronized void initiate() {
-        if (started) {
-            logger.info("already started... leaving");
-            return;
+    /** One pass: publish the configured batch, then wait out the configured interval. */
+    private void publishBatch() {
+        for (long i = 0; i < this.messages; i++) {
+            writer.writeMessage(generator.createMessage());
         }
-
-        started = true;
-        quit = false;
-        pause = false;
-        logger.info("starting thread pool");
-        pool = Executors.newFixedThreadPool(1);
-        pool.submit(this);
-    }
-
-    public synchronized void teardown() {
-        try {
-            quit = true;
-            if (!started) {
-                logger.info("teardown: not started, leaving");
-                return;
-            }
-            if (pool == null) {
-                logger.info("teardown: pool null");
-                return;
-            }
-            logger.info("teardown: shutting down");
-            // Escalate rather than waiting forever: shutdown() never interrupts, and close()
-            // blocks indefinitely, so a worker parked in a blocking read or write used to wedge
-            // this request thread permanently.
-            pool.shutdown();
-            if (!pool.awaitTermination(SHUTDOWN_WAIT_SECONDS, TimeUnit.SECONDS)) {
-                logger.info("teardown: worker still running, interrupting it.");
-                pool.shutdownNow();
-                if (!pool.awaitTermination(SHUTDOWN_WAIT_SECONDS, TimeUnit.SECONDS)) {
-                    logger.warn("teardown: worker did not respond to interrupt.");
-                }
-            }
-
-            quit = false;
-            started = false;
-            pause = false;
-        } catch (InterruptedException ignored) {
-            Thread.currentThread().interrupt();
-        }
-        logger.info("teardown: generator thread shut down.");
-    }
-
-    @Override
-    public void run() {
-        logger.info("In run method, starting stream...");
-        sendMessageStream();
-        logger.info("In run method, streaming done...");
-    }
-
-    public void sendMessageStream() {
-        logger.info("In stream method...");
-        while (!quit) {
-            if (pause) {
-                logger.info("streaming paused...");
-                try {
-                    Thread.sleep(10_000);
-                } catch (InterruptedException ignored) {
-                }
-                continue;
-            }
-
-            for (long i = 0; i < this.messages; i++) {
-                String message = generator.createMessage();
-                writer.writeMessage(message);
-            }
-            try {
-                Thread.sleep(halfSeconds * 500);
-            } catch (InterruptedException ignored) {
-            }
-        }
+        WorkerLoop.sleepFor(halfSeconds * 500);
     }
 }
