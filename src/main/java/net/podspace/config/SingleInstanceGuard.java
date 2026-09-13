@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  * taken when it is consumed. That subtraction is only meaningful while both happen on the same
  * clock, i.e. inside one JVM. Scaling out silently turns the measurement into "latency plus
  * whatever the clock skew between pods happens to be", with no error to notice - which for a
- * verification tool is worse than failing outright. Hence the explicit warning.
+ * verification tool is worse than failing outright. Hence, the explicit warning.
  */
 @Component
 public class SingleInstanceGuard {

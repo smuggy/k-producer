@@ -35,11 +35,11 @@ when it is consumed. **Both readings have to come from the same clock**, or the 
 skew rather than latency — and between availability zones the skew is routinely larger than the
 latency being measured. `myapp.role` decides how that constraint is satisfied.
 
-| Role | Publishes to | Consumes | Measures |
-|------|--------------|----------|----------|
-| `loopback` (default) | `topicName` | `topicName` | one-way latency, single process |
-| `origin` | `topicName` | `echoTopicName` | **round trip**, timed entirely on its own clock |
-| `echo` | `echoTopicName` | `topicName` | nothing — it is a relay |
+| Role                 | Publishes to    | Consumes        | Measures                                        |
+|----------------------|-----------------|-----------------|-------------------------------------------------|
+| `loopback` (default) | `topicName`     | `topicName`     | one-way latency, single process                 |
+| `origin`             | `topicName`     | `echoTopicName` | **round trip**, timed entirely on its own clock |
+| `echo`               | `echoTopicName` | `topicName`     | nothing — it is a relay                         |
 
 **`loopback`** is the original behaviour: one process both publishes and consumes, so the two
 timestamps share a clock. Valid only as a single instance — scaling out does not fail, it quietly
@@ -134,7 +134,7 @@ export SPRING_PROFILES_ACTIVE=consul
 * Rebalance count - 
 
 
-### system wide
+### system-wide
 * track offset lag to identify delays in message processing
 * monitor producer throughput to ensure data is sent at expected rate
 * evaluate end-to-end latency for timely delivery of events

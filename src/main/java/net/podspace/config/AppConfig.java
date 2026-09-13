@@ -128,13 +128,6 @@ public class AppConfig {
         return m;
     }
 
-//    @Bean
-//    public KafkaAdmin kafkaAdmin() {
-//        Map<String, Object> configs = new HashMap<>();
-//        configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapAddress);
-//        return new KafkaAdmin(configs);
-//    }
-
     /**
      * Shared by the writer and reader in queue mode, so it must stay a {@code @Bean}: the
      * CGLIB-proxied method returns the same instance to both, whereas a plain method would hand

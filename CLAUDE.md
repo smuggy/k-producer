@@ -30,16 +30,16 @@ Docker/deploy chain (Gradle tasks in `build.gradle`, run in this dependency orde
 
 Packages are organised by role in the pipeline, not by producer/consumer direction:
 
-| Package | Contents |
-|---|---|
-| `net.podspace` | `Main` — must stay in the root package so component scanning reaches every subpackage |
-| `config` | `AppConfig` (all bean wiring, role/topic resolution), `SingleInstanceGuard`, `MyBean` |
-| `web` | the three `@RestController`s |
-| `messaging` | the transport SPI: `MessageReader`, `MessageWriter`, `MessageGenerator`, `MessageConsumer`, `Pair` |
-| `messaging.kafka` / `.queue` / `.noop` | SPI implementations |
-| `pipeline` | `WorkerLoop`, `Publisher`, `Watcher`, `Relay`, `PublisherManager`, `ValueEnvelope` |
-| `domain` | `Temperature`, `TempScale`, and their generator/consumer |
-| `management` | JMX agent |
+| Package                                | Contents                                                                                           |
+|----------------------------------------|----------------------------------------------------------------------------------------------------|
+| `net.podspace`                         | `Main` — must stay in the root package so component scanning reaches every subpackage              |
+| `config`                               | `AppConfig` (all bean wiring, role/topic resolution), `SingleInstanceGuard`, `MyBean`              |
+| `web`                                  | the three `@RestController`s                                                                       |
+| `messaging`                            | the transport SPI: `MessageReader`, `MessageWriter`, `MessageGenerator`, `MessageConsumer`, `Pair` |
+| `messaging.kafka` / `.queue` / `.noop` | SPI implementations                                                                                |
+| `pipeline`                             | `WorkerLoop`, `Publisher`, `Watcher`, `Relay`, `PublisherManager`, `ValueEnvelope`                 |
+| `domain`                               | `Temperature`, `TempScale`, and their generator/consumer                                           |
+| `management`                           | JMX agent                                                                                          |
 
 ### Reader/Writer abstraction
 
@@ -64,11 +64,11 @@ Which transport is wired up is controlled entirely by the `myapp.messenger` prop
 
 Latency is a subtraction of two timestamps, so **both must come from the same clock** or the result is skew, not latency. Between availability zones the skew routinely exceeds the latency being measured. `myapp.role` (`AppConfig`) decides how that is satisfied:
 
-| Role | Writer topic | Reader topic | Notes |
-|---|---|---|---|
-| `loopback` (default) | `topicName` | `topicName` | one process, one clock; one-way latency |
-| `origin` | `topicName` | `echoTopicName` | round trip, timed on its own clock |
-| `echo` | `echoTopicName` | `topicName` | relay only; `Relay` bean auto-starts |
+| Role                 | Writer topic    | Reader topic    | Notes                                   |
+|----------------------|-----------------|-----------------|-----------------------------------------|
+| `loopback` (default) | `topicName`     | `topicName`     | one process, one clock; one-way latency |
+| `origin`             | `topicName`     | `echoTopicName` | round trip, timed on its own clock      |
+| `echo`               | `echoTopicName` | `topicName`     | relay only; `Relay` bean auto-starts    |
 
 `AppConfig.writerTopic()`/`readerTopic()` derive the topics from the role — that crossover is the whole mechanism, so be careful editing them.
 

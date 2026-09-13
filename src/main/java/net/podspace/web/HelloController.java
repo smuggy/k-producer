@@ -10,12 +10,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class HelloController {
     private static final Logger logger = LoggerFactory.getLogger(HelloController.class);
     private final MyBean b;
-//    private final static String TOPIC_NAME = "test-topic-one";
-//    private final KafkaTemplate<String, String> kafkaTemplate;
 
-    public HelloController(MyBean b){//, KafkaTemplate<String,String> kafkaTemplate) {
+    public HelloController(MyBean b){
         this.b = b;
-//        this.kafkaTemplate = kafkaTemplate;
     }
 
     @GetMapping("/")
@@ -37,20 +34,6 @@ public class HelloController {
 
     @GetMapping("/other")
     public String other() {
-//        sendMessage("I got called");
         return "Value = " + b.getValue();
     }
-
-//    public void sendMessage(String message) {
-//        CompletableFuture<SendResult<String, String>> future = kafkaTemplate.send(TOPIC_NAME, message);
-//        future.whenComplete((result, ex) -> {
-//            if (ex == null) {
-//                logger.info("Sent message=[" + message +
-//                        "] with offset=[" + result.getRecordMetadata().offset() + "]");
-//            } else {
-//                logger.info("Unable to send message=[" +
-//                        message + "] due to : " + ex.getMessage());
-//            }
-//        });
-//    }
 }
