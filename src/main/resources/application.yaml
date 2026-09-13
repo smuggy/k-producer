@@ -40,6 +40,9 @@ myapp:
   # measures one-way latency. origin/echo split that across two instances and two topics so the
   # round trip is timed on a single clock - see the single-instance note in the README.
   role: loopback
+  # Availability zone this instance runs in; tagged onto every metric so an origin in one zone and
+  # an echo in another can be compared. Set per deployment.
+  az: unknown
   publisher:
     messageCount: 5
     sleep: 10
@@ -50,6 +53,9 @@ myapp:
     # re-consume its own output. Unused by the loopback role.
     echoTopicName: test-topic-echo
     groupId: test-group-id
+    # latest = measure from now (correct for latency runs); earliest = read the whole backlog
+    # first (use when checking for lost messages, and expect a large first-pass latency).
+    autoOffsetReset: latest
 #    bootstrapAddress: kafka-00:9092,kafka-01:9092,kafka-02:9092
     # TODO: bug - hardcoded LAN IP replacing loopback default breaks local dev for anyone off this network.
     bootstrapAddress: 192.168.0.60:9092

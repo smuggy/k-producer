@@ -1,8 +1,15 @@
+# provider consul {
+#   address    = "prometheus.podspace.net:443"
+#   scheme     = "https"
+#   token      = "---put valid token here---"
+#   datacenter = "us-east-2"
+# }
+
 provider consul {
-  address    = "prometheus.podspace.net:443"
+  address    = "consul.ps.internal:8501"
   scheme     = "https"
   token      = "---put valid token here---"
-  datacenter = "us-east-2"
+  datacenter = "local-net-1"
 }
 
 #terraform {

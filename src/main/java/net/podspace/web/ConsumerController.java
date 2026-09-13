@@ -11,7 +11,6 @@ import net.podspace.pipeline.ValueEnvelope;
 import net.podspace.pipeline.Watcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,30 +45,23 @@ public class ConsumerController {
     private static final int RECENT_SAMPLES = 1_000;
 
     private final Watcher<Temperature> watcher;
-    private final String role;
     private final Timer latency;
     private final Counter skipped;
     /** Guarded by {@link #recentLock}; oldest entries evicted past RECENT_SAMPLES. */
     private final Deque<ItemStat> recent = new ArrayDeque<>();
     private final Object recentLock = new Object();
 
-    public ConsumerController(Watcher<Temperature> watcher,
-                              MeterRegistry registry,
-                              @Value("${myapp.role:loopback}") String role) {
+    public ConsumerController(Watcher<Temperature> watcher, MeterRegistry registry) {
         this.watcher = watcher;
-        this.role = role;
         this.latency = Timer.builder("kproducer.message.latency")
                 .description("End-to-end latency from message creation to consumption")
-                // Tagged by role because the number means different things: loopback is one-way,
-                // origin is a full round trip through the echo instance. Mixing them in one series
-                // would make the histogram meaningless.
-                .tag("role", role)
+                // The role tag that keeps one-way and round-trip samples apart is applied
+                // globally as a common tag - see MetricsConfig.
                 .publishPercentiles(0.5, 0.95, 0.99)
                 .serviceLevelObjectives(LATENCY_BUCKETS)
                 .register(registry);
         this.skipped = Counter.builder("kproducer.message.skipped")
                 .description("Consumed messages with no usable timestamp, so no latency recorded")
-                .tag("role", role)
                 .register(registry);
         // Record as each message arrives, on the watcher thread, rather than buffering whole
         // messages until someone calls /stats.

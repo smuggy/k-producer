@@ -65,6 +65,15 @@ public class AppConfig {
     private String messenger;
     @Value("${myapp.kafka.groupId:default-consumer}")
     private String groupId;
+    /**
+     * Defaults to latest because this is primarily a latency probe: a consumer that starts behind
+     * measures the age of history rather than current cluster performance. A backlogged topic was
+     * observed reporting a 91-second sample, which swamped the mean and max while p50 sat at 16ms.
+     * Switch to earliest when completeness matters more than latency - checking for lost messages,
+     * for instance - and accept that the first pass will report the backlog's age.
+     */
+    @Value("${myapp.kafka.autoOffsetReset:latest}")
+    private String autoOffsetReset;
     // Defaults to "all" so an environment that omits the key still exercises replication. With
     // acks=0 the producer does not wait for even a leader acknowledgement, which makes any
     // durability or delivery check meaningless.
@@ -181,10 +190,7 @@ public class AppConfig {
     // by-type lookups ambiguous. Nothing outside this class injects these types.
 
     private KafkaWriter kafkaWriter() {
-        var writer = new KafkaWriter();
-        writer.setTopicName(writerTopic());
-        writer.setKafkaTemplate(new KafkaTemplate<>(producerFactory()));
-        return writer;
+        return new KafkaWriter(new KafkaTemplate<>(producerFactory()), writerTopic(), meterRegistry);
     }
 
     private ProducerFactory<String, String> producerFactory() {
@@ -211,12 +217,12 @@ public class AppConfig {
         configProps.put(
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 bootstrapAddress);
-        // Start at the beginning only when this group has no committed offset. This replaces the
-        // seekToBeginning that KafkaReader used to do on every partition assignment, which threw
-        // away committed offsets and replayed the topic on each rebalance.
+        // Only consulted when this group has no committed offset. Replaces the seekToBeginning
+        // KafkaReader used to do on every partition assignment, which discarded committed offsets
+        // and replayed the topic on each rebalance.
         configProps.put(
                 ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
-                "earliest");
+                autoOffsetReset);
         configProps.put(
                 ConsumerConfig.GROUP_ID_CONFIG,
                 groupId);
