@@ -35,6 +35,13 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
     private final Map<Integer, Counter> recordCounters = new ConcurrentHashMap<>();
     private final Map<Integer, Timer> ageTimers = new ConcurrentHashMap<>();
     private final Map<Integer, AtomicLong> lastOffsets = new ConcurrentHashMap<>();
+    /**
+     * Whether this consumer currently holds a partition assignment. Maintained from the rebalance
+     * callbacks, which run on the polling thread, rather than by calling consumer.assignment():
+     * KafkaConsumer permits only single-threaded access, so querying it from a health-check
+     * request thread would throw ConcurrentModificationException.
+     */
+    private volatile boolean assigned;
 
     public KafkaReader(ConsumerFactory<String, String> consumer, String topicName, MeterRegistry registry) {
         this.registry = registry;
@@ -95,8 +102,19 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
         }
     }
 
+    /**
+     * False while this consumer holds no partitions - it has not yet joined the group, or cannot
+     * reach the brokers. Distinguishes "connected but idle" from "not consuming at all", which a
+     * poll that simply returns empty records cannot.
+     */
+    @Override
+    public boolean isReady() {
+        return assigned;
+    }
+
     @Override
     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+        assigned = false;
         try {
             consumer.commitSync(Duration.ofSeconds(5));
         } catch (KafkaException e) {
@@ -106,6 +124,7 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
 
     @Override
     public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+        assigned = !partitions.isEmpty();
         // Deliberately does NOT seek: this fires on every rebalance, so seeking to the beginning
         // here discarded committed offsets and replayed the whole topic on every restart, deploy
         // or scale event. "Start from the beginning when this group has no committed offset" is

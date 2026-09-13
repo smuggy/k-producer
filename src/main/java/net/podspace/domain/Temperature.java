@@ -2,8 +2,7 @@ package net.podspace.domain;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -11,7 +10,6 @@ import java.util.UUID;
  */
 
 public class Temperature implements Comparable<Temperature> {
-    private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
     @JsonProperty("scale")
     private TempScale scale;
     @JsonProperty("time")
@@ -28,7 +26,9 @@ public class Temperature implements Comparable<Temperature> {
 
     Temperature(double temp, TempScale scale, String filler) {
         this.temp = temp;
-        this.time = LocalDateTime.now().format(formatter);
+        // ISO-8601 UTC. A local, zoneless timestamp is ambiguous the moment producer and
+        // consumer sit in different zones - it would silently misreport latency by hours.
+        this.time = Instant.now().toString();
         this.scale = scale;
         this.timeId = UUID.randomUUID().toString();
         setFiller(filler);
@@ -82,7 +82,6 @@ public class Temperature implements Comparable<Temperature> {
 
     @Override
     public int compareTo(Temperature other) {
-        return LocalDateTime.parse(this.time, formatter).
-                compareTo(LocalDateTime.parse(other.time, formatter));
+        return Instant.parse(this.time).compareTo(Instant.parse(other.time));
     }
 }

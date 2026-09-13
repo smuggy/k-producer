@@ -1,14 +1,28 @@
 ---
 management:
   endpoint:
+    # `access` replaces the per-endpoint `enabled` flag deprecated in Boot 3.4.
+    # health/info/metrics are enabled by default, so they no longer need declaring at all;
+    # shutdown is off by default and must be turned on explicitly.
     shutdown:
-      enabled: true
+      access: unrestricted
     health:
-      enabled: true
-    metrics:
-      enabled: true
-    info:
-      enabled: true
+      # Internal diagnostic tool with everything already exposed; the relay counters are the
+      # point of the indicator, so surface them rather than hiding behind the default "never".
+      show-details: always
+      probes:
+        enabled: true
+      # The relay contributor only exists in the echo role, so the readiness group would fail
+      # validation in every other role.
+      validate-group-membership: false
+      group:
+        # Liveness deliberately excludes the relay: a relay in backoff means the brokers are
+        # unreachable, not that this process is broken. Restarting on that would produce restart
+        # storms during the very outage being measured.
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState, relay
   observations:
     annotations:
       enabled: true
@@ -16,7 +30,8 @@ management:
     web:
       exposure:
         include: "*"
-#    enabled-by-default: false
+#    access:
+#      default: none    # replaces the deprecated management.endpoints.enabled-by-default
 ---
 myapp:
   val: ooh

@@ -74,7 +74,7 @@ Latency is a subtraction of two timestamps, so **both must come from the same cl
 
 **Why echo mode exists:** the origin stamps a message and later reads its own stamp back, so a round trip needs **no clock synchronisation at all**. This is the supported way to measure across zones or hosts. Prefer it over trying to discipline clocks.
 
-`loopback` is still single-instance-only: scaling out silently reports skew as latency, and `LocalDateTime` carries no timezone so cross-zone pods can produce wildly wrong or negative values. `SingleInstanceGuard` warns at startup when discovery reports more than one instance, but discovery is only enabled on the `test`/`consul` profiles, so it is best-effort.
+`loopback` is still single-instance-only: scaling out silently reports skew as latency. Timestamps are ISO-8601 UTC (`Instant`), so a zone difference no longer corrupts the figure outright, but skew between machines still does. `SingleInstanceGuard` warns at startup when discovery reports more than one instance, but discovery is only enabled on the `test`/`consul` profiles, so it is best-effort.
 
 **Two amplification guards, both fail fast at startup.** Either would make the relay re-consume its own output without bound:
 1. `echoTopicName` equal to `topicName` (checked in `validateRole()`).

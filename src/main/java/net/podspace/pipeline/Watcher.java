@@ -6,15 +6,13 @@ import net.podspace.messaging.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
 public class Watcher<T extends Comparable<T>> {
     private static final Logger logger = LoggerFactory.getLogger(Watcher.class);
-    private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
     private static final long PAUSE_MILLIS = 5_000;
     private final MessageConsumer<T> consumer;
     private final MessageReader reader;
@@ -79,7 +77,7 @@ public class Watcher<T extends Comparable<T>> {
                 continue;
             }
             ValueEnvelope<T> envelope = new ValueEnvelope<>(
-                    val.get().a(), LocalDateTime.now().format(formatter), val.get().b());
+                    val.get().a(), Instant.now().toString(), val.get().b());
             try {
                 target.accept(envelope);
             } catch (RuntimeException e) {

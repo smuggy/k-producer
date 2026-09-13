@@ -62,6 +62,11 @@ public class Relay {
         return loop.isHealthy();
     }
 
+    /** Whether the inbound side is actually attached; see MessageReader.isReady(). */
+    public boolean isReaderReady() {
+        return reader.isReady();
+    }
+
     public long getTotalFailures() {
         return loop.getTotalFailures();
     }

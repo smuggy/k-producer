@@ -23,9 +23,10 @@ Kafka configuration for both publish and consume. The publisher
 creates messages on a regular basis (every 5 seconds) upon initiation of
 a small message (<150 bytes). That looks like:
 ```json
-{"id":"2b142890-088a-4c1a-bec0-83c587978050","temp":41.855612831361164,"time":"2024-03-19 19:40:27.767962","scale":"C","filler":""}
+{"id":"2b142890-088a-4c1a-bec0-83c587978050","temp":41.855612831361164,"time":"2024-03-19T19:40:27.767962Z","scale":"C","filler":""}
 ```
-The filler can be added to the messages, this is a random set of numbers.
+The filler can be added to the messages, this is a random set of numbers. `time` is an ISO-8601
+instant in UTC — it must be zone-explicit, since producer and consumer may sit in different zones.
 
 ## Roles
 

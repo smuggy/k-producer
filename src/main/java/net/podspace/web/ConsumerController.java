@@ -17,8 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -30,7 +29,6 @@ import java.util.concurrent.TimeUnit;
 @RequestMapping("/consumer")
 public class ConsumerController {
     private static final Logger logger = LoggerFactory.getLogger(ConsumerController.class);
-    private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
     /**
      * Explicit buckets, so /actuator/prometheus exports a bounded, readable set of `_bucket`
      * series rather than the ~276 a percentile histogram would generate.
@@ -138,8 +136,8 @@ public class ConsumerController {
             return;
         }
         try {
-            LocalDateTime readTime = LocalDateTime.parse(envelope.time(), formatter);
-            LocalDateTime writeTime = LocalDateTime.parse(t.getTime(), formatter);
+            Instant readTime = Instant.parse(envelope.time());
+            Instant writeTime = Instant.parse(t.getTime());
             Duration d = Duration.between(writeTime, readTime);
             latency.record(d);
 

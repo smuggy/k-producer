@@ -14,7 +14,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: k-producer
-        app.kubernetes.io/version: 0.3.1
+        app.kubernetes.io/version: 0.4.1
     spec:
       serviceAccountName: k-producer-sa
       automountServiceAccountToken: true
@@ -22,22 +22,38 @@ spec:
         kubernetes.io/os: linux
       containers:
         - name: k-producer-ctr
-          image: mmckernan/k-producer:0.3.1
+          image: mmckernan/k-producer:0.4.1
           ports:
             - containerPort: 8080
               name: http
               protocol: TCP
+          # Group-specific paths, not the aggregate /actuator/health: the relay contributes to
+          # readiness only, so an unreachable broker takes the pod out of service without
+          # restarting it.
           livenessProbe:
             httpGet:
               port: 8080
-              path: /actuator/health
+              path: /actuator/health/liveness
           readinessProbe:
             httpGet:
               port: 8080
-              path: /actuator/health
+              path: /actuator/health/readiness
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              # Deliberately no cpu limit. A CFS quota throttles the process in bursts, and this
+              # application exists to measure latency - throttling would show up as Kafka latency
+              # that is not really there. The request reserves capacity without capping it.
+              memory: 1Gi
           securityContext:
             privileged: false
             allowPrivilegeEscalation: false
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: test
+            # Container-aware defaults cap the heap at 25% of the limit, which would leave ~256Mi
+            # here and risk an OOM kill while the heap still looks small.
+            - name: JAVA_OPTS
+              value: "-XX:MaxRAMPercentage=75.0"
