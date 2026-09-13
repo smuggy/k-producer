@@ -9,11 +9,12 @@ plugins {
 group = 'net.podspace'
 version = '0.5.0'
 
-// Compile against the Java 21 API and emit Java 21 bytecode whatever JDK runs Gradle. Without
+// Pin the bytecode/API level to the JRE in the Docker image, whatever JDK runs Gradle. Without
 // this the class file version silently tracks the local JDK - a JDK 26 build produced major
-// version 70 class files, which the JDK 21 runtime in the Docker image cannot load at all.
+// version 70 class files, which an older JRE in the image cannot load at all. Keep this in step
+// with the eclipse-temurin tag in src/main/docker/Dockerfile.
 tasks.withType(JavaCompile).configureEach {
-    options.release = 21
+    options.release = 25
 }
 
 repositories {
@@ -46,18 +47,47 @@ tasks.register("prepareDockerDir", Copy) {
     into layout.buildDirectory.dir("docker")
 }
 
+// Docker Desktop, Colima, Rancher and the Linux packages all install the binary somewhere
+// different, so the location is a property rather than a hardcoded path:
+//   ./gradlew buildDockerImage -PdockerExecutable=/usr/local/bin/docker
+// or set dockerExecutable=... in gradle.properties.
+def dockerExe = providers.gradleProperty("dockerExecutable").getOrElse("docker")
+
+/**
+ * The Gradle daemon captures PATH when it starts and is then reused for hours, so a daemon
+ * launched from an environment without docker on its PATH keeps failing even once your shell can
+ * find it. On macOS this bites when the daemon was started by an IDE opened from Finder or the
+ * Dock, which does not inherit the shell PATH. Gradle's own error for this is just
+ * "A problem occurred starting process", which points nowhere, hence the explicit check.
+ */
+def requireDocker = {
+    def probe = providers.exec {
+        commandLine "/usr/bin/env", "sh", "-c", "command -v '${dockerExe}'"
+        ignoreExitValue = true
+    }
+    if (probe.result.get().exitValue != 0) {
+        throw new GradleException("Docker executable '${dockerExe}' was not found on the Gradle "
+                + "daemon's PATH.\n"
+                + "  - The daemon caches PATH from whatever started it: try './gradlew --stop' and re-run.\n"
+                + "  - Or point at it directly: -PdockerExecutable=/full/path/to/docker")
+    }
+}
+
 tasks.register("buildDockerImage", Exec) {
     workingDir layout.getBuildDirectory()
-    commandLine "docker", "build", "--build-arg", "APP_VERSION=${project.version}", "--tag", "${project.name}:${project.version}", "docker"
+    commandLine dockerExe, "build", "--build-arg", "APP_VERSION=${project.version}", "--tag", "${project.name}:${project.version}", "docker"
+    doFirst { requireDocker() }
 }
 
 tasks.register("tagDockerImage", Exec) {
     workingDir layout.getBuildDirectory()
-    commandLine "docker", "image", "tag", "${project.name}:${project.version}", "mmckernan/${project.name}:${project.version}"
+    commandLine dockerExe, "image", "tag", "${project.name}:${project.version}", "mmckernan/${project.name}:${project.version}"
+    doFirst { requireDocker() }
 }
 
 tasks.register("pushDockerImage", Exec) {
-    commandLine "docker", "push", "mmckernan/${project.name}:${project.version}"
+    commandLine dockerExe, "push", "mmckernan/${project.name}:${project.version}"
+    doFirst { requireDocker() }
 }
 
 copyTarToDockerDir.dependsOn build
