@@ -3,11 +3,18 @@ import org.springframework.boot.gradle.plugin.SpringBootPlugin
 plugins {
     id 'java'
     id 'application'
-    id 'org.springframework.boot' version '3.5.14'
+    id 'org.springframework.boot' version '4.0.8'
 }
 
 group = 'net.podspace'
-version = '0.4.1'
+version = '0.5.0'
+
+// Compile against the Java 21 API and emit Java 21 bytecode whatever JDK runs Gradle. Without
+// this the class file version silently tracks the local JDK - a JDK 26 build produced major
+// version 70 class files, which the JDK 21 runtime in the Docker image cannot load at all.
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+}
 
 repositories {
     mavenCentral()
@@ -67,21 +74,22 @@ dependencies {
     // BOM_COORDINATES tracks the applied Boot plugin version, so the two cannot drift.
     implementation platform(SpringBootPlugin.BOM_COORDINATES)
     testImplementation platform(SpringBootPlugin.BOM_COORDINATES)
+    // Spring Cloud ships its own train and gates the Boot version: 2025.1.3 targets Boot 4.0.8,
+    // so the two must be bumped together. Boot 4.1.x has no matching stable train yet.
+    implementation platform("org.springframework.cloud:spring-cloud-dependencies:2025.1.3")
 
     implementation 'org.slf4j:slf4j-api'
     // Deliberate override: ahead of the log4j version Boot manages.
     implementation 'org.apache.logging.log4j:log4j-core:2.25.4'
     implementation 'org.apache.logging.log4j:log4j-layout-template-json:2.25.4'
 
-    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-log4j2'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    // Not covered by Boot's BOM - Spring Cloud ships its own release train. Must be kept in step
-    // with the Boot version by hand until the spring-cloud-dependencies BOM is adopted too.
-    implementation 'org.springframework.cloud:spring-cloud-starter-consul-all:4.3.3'
+    implementation 'org.springframework.cloud:spring-cloud-starter-consul-all'
 
-    // Deliberate override: one patch ahead of the 3.3.15 Boot 3.5.14 manages.
-    implementation 'org.springframework.kafka:spring-kafka:3.3.16'
+    // Boot 4 moved Kafka auto-config into its own starter; a bare spring-kafka no longer brings it.
+    implementation 'org.springframework.boot:spring-boot-starter-kafka'
     implementation 'org.apache.kafka:kafka-clients'
 
     // Version comes from the BOM: pinning this independently is what previously left it on a

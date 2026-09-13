@@ -1,7 +1,7 @@
 package net.podspace.domain;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import net.podspace.messaging.MessageConsumer;
 import net.podspace.messaging.Pair;
 import org.slf4j.Logger;
@@ -20,7 +20,7 @@ public class TemperatureConsumer implements MessageConsumer<Temperature> {
                 return Optional.empty();
             Pair<Temperature, Integer> p = new Pair<>(o, s.length());
             return Optional.of(p);
-        } catch (JsonProcessingException jme) {
+        } catch (JacksonException jme) {
             logger.warn("Unable to map string to object.", jme);
             return Optional.empty();
         }
