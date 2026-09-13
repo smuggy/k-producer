@@ -73,6 +73,30 @@ def requireDocker = {
     }
 }
 
+// Override with -PdockerPlatforms=linux/amd64 to publish a single architecture.
+def dockerPlatforms = providers.gradleProperty("dockerPlatforms").getOrElse("linux/amd64,linux/arm64")
+
+/**
+ * Buildx's default "docker" driver cannot produce multi-platform images; that needs a
+ * docker-container builder. Checking up front turns an obscure mid-build failure into an
+ * instruction.
+ */
+def requireMultiArchBuilder = {
+    def probe = providers.exec {
+        commandLine dockerExe, "buildx", "inspect"
+        ignoreExitValue = true
+    }
+    if (probe.result.get().exitValue != 0) {
+        throw new GradleException("'${dockerExe} buildx' is not usable. Buildx ships with Docker "
+                + "Desktop; on Linux it may need installing separately.")
+    }
+    if (probe.standardOutput.asText.get() =~ /(?m)^Driver:\s+docker\s*$/) {
+        throw new GradleException("The active buildx builder uses the default 'docker' driver, "
+                + "which cannot build multi-platform images.\n"
+                + "  Create one that can:  ${dockerExe} buildx create --name multiarch --use --bootstrap")
+    }
+}
+
 tasks.register("buildDockerImage", Exec) {
     workingDir layout.getBuildDirectory()
     commandLine dockerExe, "build", "--build-arg", "APP_VERSION=${project.version}", "--tag", "${project.name}:${project.version}", "docker"
@@ -90,9 +114,39 @@ tasks.register("pushDockerImage", Exec) {
     doFirst { requireDocker() }
 }
 
+/**
+ * Builds and publishes one tag covering every platform in dockerPlatforms.
+ *
+ * <p>A tag points at a single manifest, so pushing the same tag from an amd64 host simply replaces
+ * whatever an arm64 host pushed before it - the architectures do not merge. This publishes a
+ * manifest list instead, letting each client pull the image matching its own platform.
+ *
+ * <p>Cross-building is close to free here: the distribution is JVM bytecode and shell scripts,
+ * with nothing architecture-specific, and eclipse-temurin is already multi-arch. Buildx just
+ * copies the same tar onto each base image - no QEMU emulation of a compiler.
+ *
+ * <p>Note this pushes directly and produces no local image: buildx cannot load a multi-platform
+ * build into the local daemon. Use buildDockerImage for local single-arch iteration.
+ */
+tasks.register("pushMultiArchImage", Exec) {
+    workingDir layout.getBuildDirectory()
+    commandLine dockerExe, "buildx", "build",
+            "--platform", dockerPlatforms,
+            "--build-arg", "APP_VERSION=${project.version}",
+            "--tag", "mmckernan/${project.name}:${project.version}",
+            "--push", "docker"
+    doFirst {
+        requireDocker()
+        requireMultiArchBuilder()
+        logger.lifecycle("Publishing mmckernan/${project.name}:${project.version} for ${dockerPlatforms}")
+    }
+}
+
 copyTarToDockerDir.dependsOn build
 buildDockerImage.dependsOn prepareDockerDir
 buildDockerImage.dependsOn copyTarToDockerDir
+pushMultiArchImage.dependsOn prepareDockerDir
+pushMultiArchImage.dependsOn copyTarToDockerDir
 tagDockerImage.dependsOn buildDockerImage
 pushDockerImage.dependsOn tagDockerImage
 
