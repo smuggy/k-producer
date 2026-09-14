@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 public class TemperatureTest {
     @Test
     public void TestCelsiusCreation() {
-        var temp = Temperature.createCelsiusTemp(33, "");
+        var temp = Temperature.createCelsiusTemp(33, "", "test-run", 7);
         Assertions.assertEquals(33, temp.getTemp());
         Assertions.assertEquals(TempScale.CELSIUS, temp.getScale());
     }

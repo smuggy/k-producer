@@ -16,6 +16,7 @@ import net.podspace.messaging.noop.ConsoleWriter;
 import net.podspace.messaging.noop.EmptyReader;
 import net.podspace.messaging.noop.EmptyWriter;
 import net.podspace.messaging.queue.QueueManager;
+import net.podspace.pipeline.DeliveryLedger;
 import net.podspace.pipeline.Publisher;
 import net.podspace.pipeline.Relay;
 import net.podspace.pipeline.PublisherManager;
@@ -239,9 +240,15 @@ public class AppConfig {
 
     // Calling the factory methods directly rather than injecting by type: QueueManager implements
     // both MessageWriter and MessageReader, so by-type resolution was previously ambiguous.
+    /** Shared by the generator that issues sequences and the sink that reconciles them. */
+    @Bean
+    public DeliveryLedger deliveryLedger() {
+        return new DeliveryLedger(meterRegistry);
+    }
+
     @Bean
     public Publisher publisher() {
-        var producer = new TemperatureGenerator();
+        var producer = new TemperatureGenerator(deliveryLedger());
         var publisher = new Publisher(producer, messageWriter());
         publisher.setSleep(sleepConfig);
         publisher.setFillerSize(fillerSize);

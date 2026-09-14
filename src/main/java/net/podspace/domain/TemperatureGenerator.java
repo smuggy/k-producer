@@ -1,6 +1,7 @@
 package net.podspace.domain;
 
 import net.podspace.messaging.MessageGenerator;
+import net.podspace.pipeline.DeliveryLedger;
 
 import java.util.Random;
 
@@ -12,9 +13,17 @@ public class TemperatureGenerator implements MessageGenerator {
     // Set from request threads via /publisher/raisefillersize, read by the publisher worker
     // thread; volatile supplies the happens-before edge.
     private volatile int fillerSize = 0;
+    private final DeliveryLedger ledger;
+
+    public TemperatureGenerator(DeliveryLedger ledger) {
+        this.ledger = ledger;
+    }
 
     public String createMessage() {
-        Temperature t = Temperature.createCelsiusTemp(RANDOM.nextDouble(100), generateFiller());
+        // Drawing the sequence from the ledger is what records the message as produced - there is
+        // no separate bookkeeping call that could be forgotten or double-counted.
+        Temperature t = Temperature.createCelsiusTemp(
+                RANDOM.nextDouble(100), generateFiller(), ledger.getRunId(), ledger.nextSequence());
         return t.toJsonString();
     }
 

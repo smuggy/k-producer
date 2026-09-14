@@ -7,12 +7,14 @@ import io.micrometer.core.instrument.distribution.CountAtBucket;
 import io.micrometer.core.instrument.distribution.HistogramSnapshot;
 import io.micrometer.core.instrument.distribution.ValueAtPercentile;
 import net.podspace.domain.Temperature;
+import net.podspace.pipeline.DeliveryLedger;
 import net.podspace.pipeline.ValueEnvelope;
 import net.podspace.pipeline.Watcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
@@ -45,14 +47,17 @@ public class ConsumerController {
     private static final int RECENT_SAMPLES = 1_000;
 
     private final Watcher<Temperature> watcher;
+    private final DeliveryLedger ledger;
     private final Timer latency;
     private final Counter skipped;
     /** Guarded by {@link #recentLock}; oldest entries evicted past RECENT_SAMPLES. */
     private final Deque<ItemStat> recent = new ArrayDeque<>();
     private final Object recentLock = new Object();
 
-    public ConsumerController(Watcher<Temperature> watcher, MeterRegistry registry) {
+    public ConsumerController(Watcher<Temperature> watcher, MeterRegistry registry,
+                              DeliveryLedger ledger) {
         this.watcher = watcher;
+        this.ledger = ledger;
         this.latency = Timer.builder("kproducer.message.latency")
                 .description("End-to-end latency from message creation to consumption")
                 // The role tag that keeps one-way and round-trip samples apart is applied
@@ -121,6 +126,11 @@ public class ConsumerController {
      */
     private void record(ValueEnvelope<Temperature> envelope) {
         Temperature t = envelope.item();
+        if (t != null) {
+            // Reconcile first and unconditionally: a message with an unusable timestamp still
+            // arrived, and must not be reported as lost just because its latency is unknown.
+            ledger.received(t.getRun(), t.getSeq());
+        }
         // Jackson leaves these null for anything on the topic that is not one of our messages.
         if (t == null || t.getTime() == null || envelope.time() == null) {
             skipped.increment();
@@ -168,6 +178,43 @@ public class ConsumerController {
         sb.append("</table><p>showing most recent ").append(samples.size())
                 .append(" of ").append(latency.count()).append(" total messages");
         return sb.toString();
+    }
+
+    /**
+     * Delivery reconciliation: what was published against what came back.
+     *
+     * <p>{@code pending} is the honest "not yet judged" bucket - sequences that may still be in
+     * flight. Stop the publisher, let the pipeline drain, then call with {@code ?finalize=true} to
+     * settle them, at which point {@code missing} is the loss figure.
+     */
+    @GetMapping("/reconciliation")
+    public String reconciliation(@RequestParam(defaultValue = "false") boolean finalize) {
+        if (finalize) {
+            ledger.finalizeOutstanding();
+        }
+        DeliveryLedger.Snapshot s = ledger.snapshot();
+        String verdict = s.pending() > 0
+                ? "INCONCLUSIVE - " + s.pending() + " sequences still pending; stop the publisher, "
+                        + "let it drain, then re-check with ?finalize=true"
+                : (s.missing() == 0 ? "NO LOSS DETECTED" : "LOSS DETECTED: " + s.missing() + " message(s)");
+
+        return "<html><body><h3>" + verdict + "</h3><table>"
+                + row("run id", s.runId())
+                + row("produced", s.produced())
+                + row("received", s.received())
+                + row("missing (settled, never arrived)", s.missing())
+                + row("pending (in flight, unjudged)", s.pending())
+                + row("duplicates", s.duplicates())
+                + row("late (arrived after settling)", s.late())
+                + row("out of order", s.outOfOrder())
+                + row("foreign (other runs, ignored)", s.foreign())
+                + "</table><p>Duplicates and reordering are expected across partitions; Kafka only "
+                + "orders within one. Compare missing against kproducer_producer_errors_total - a "
+                + "send that failed locally was never the cluster's to lose.</p></body></html>";
+    }
+
+    private static String row(String label, Object value) {
+        return "<tr><td>" + label + "</td><td>" + value + "</td></tr>";
     }
 
     @GetMapping("/histogram")

@@ -20,11 +20,19 @@ public class Temperature implements Comparable<Temperature> {
     private String timeId;
     @JsonProperty("filler")
     private String filler = "";
+    /** Identifies the publisher run, so a consumer can ignore messages left by earlier runs. */
+    @JsonProperty("run")
+    private String run = "";
+    /** Monotonic within a run; the basis for detecting gaps, duplicates and reordering. */
+    @JsonProperty("seq")
+    private long seq = -1;
 
     public Temperature() {
     }
 
-    Temperature(double temp, TempScale scale, String filler) {
+    Temperature(double temp, TempScale scale, String filler, String run, long seq) {
+        this.run = (run == null) ? "" : run;
+        this.seq = seq;
         this.temp = temp;
         // ISO-8601 UTC. A local, zoneless timestamp is ambiguous the moment producer and
         // consumer sit in different zones - it would silently misreport latency by hours.
@@ -34,12 +42,20 @@ public class Temperature implements Comparable<Temperature> {
         setFiller(filler);
     }
 
-    public static Temperature createCelsiusTemp(double temp, String filler) {
-        return new Temperature(temp, TempScale.CELSIUS, filler);
+    public static Temperature createCelsiusTemp(double temp, String filler, String run, long seq) {
+        return new Temperature(temp, TempScale.CELSIUS, filler, run, seq);
     }
 
     public static Temperature createFahrenheitTemp(double temp, String filler) {
-        return new Temperature(temp, TempScale.FAHRENHEIT, filler);
+        return new Temperature(temp, TempScale.FAHRENHEIT, filler, "", -1);
+    }
+
+    public String getRun() {
+        return run;
+    }
+
+    public long getSeq() {
+        return seq;
     }
 
     public String getFiller() {
@@ -72,7 +88,9 @@ public class Temperature implements Comparable<Temperature> {
                 "\",\"temp\":" + temp +
                 ",\"time\":\"" + time +
                 "\",\"scale\":\"" + scale.getScale() +
-                "\",\"filler\":\"" + filler + "\"}";
+                "\",\"run\":\"" + run +
+                "\",\"seq\":" + seq +
+                ",\"filler\":\"" + filler + "\"}";
     }
 
     @Override
