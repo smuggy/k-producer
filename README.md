@@ -79,11 +79,11 @@ Notes:
   the `echo` role on a transport whose reader and writer are the same channel (`messenger=queue`).
   Either would make the relay re-consume its own output and amplify without bound.
 
-The API provides for the following:
+The API provides for the following (plus the actuator endpoints, notably
+`/actuator/info` for the running build, `/actuator/health` and `/actuator/prometheus`):
 
 | Endpoint                    | Description                                                |
 |-----------------------------|------------------------------------------------------------|
-| /                           | home page, no functionality                                |
 | /publisher/start            | start publishing messages                                  |
 | /publisher/stop             | stop publishing messages                                   |
 | /publisher/pause            | pause publishing messages                                  |

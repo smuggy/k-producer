@@ -10,9 +10,9 @@ RUN mkdir /app && \
 
 FROM eclipse-temurin:25-jre
 
-ARG APP_VERSION="0.0.0"
-ENV APP_VERSION=${APP_VERSION}
-
+# No APP_VERSION arg: the version is served from /actuator/info, generated at build time by the
+# Gradle buildInfo() task. The __app_version__ placeholders above and in run.sh are substituted by
+# the prepareDockerDir task and are unrelated to any docker build arg.
 COPY --from=builder /app /app
 COPY run.sh /
 

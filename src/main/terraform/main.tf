@@ -3,7 +3,6 @@ resource consul_key_prefix app_configuration_ext {
   path_prefix = "config/k-producer,ext/"
   subkeys = {
     "server/port"                  = "8090"
-    "myapp/val"                    = "tf-val"
     "myapp/messenger"              = "kafka"
     "myapp/role"                   = "loopback"
     "myapp/kafka/acks"             = "all"
@@ -19,7 +18,6 @@ resource consul_key_prefix app_configuration_consul {
   path_prefix = "config/k-producer,consul/"
   subkeys = {
     "server/port"                  = "8090"
-    "myapp/val"                    = "tf-val"
     "myapp/messenger"              = "kafka"
     "myapp/publisher/sleep"        = 2
     "myapp/publisher/fillerSize"   = 1024
@@ -37,7 +35,6 @@ resource consul_key_prefix app_configuration_other {
   path_prefix = "config/k-producer,other/"
   subkeys = {
     "server/port"                  = "8080"
-    "myapp/val"                    = "tf-other-val"
     "myapp/messenger"              = "kafka"
     "myapp/role"                   = "loopback"
     "myapp/kafka/topicName"        = "test-topic-two"

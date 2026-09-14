@@ -34,7 +34,6 @@ management:
 #      default: none    # replaces the deprecated management.endpoints.enabled-by-default
 ---
 myapp:
-  val: ooh
   messenger: kafka
   # loopback | origin | echo. loopback publishes and consumes one topic in this process and
   # measures one-way latency. origin/echo split that across two instances and two topics so the
@@ -100,7 +99,7 @@ spring:
   jmx:
     enabled: true
   config:
-    import: "consul:consul.ps.internal:8500"
+    import: "consul:consul.ps.internal:8501"
     activate:
       on-profile: test
   application:
@@ -108,11 +107,16 @@ spring:
   cloud:
     consul:
       host: consul.ps.internal
-      port: 8500
-      scheme: http
+      port: 8501
+      scheme: https
       config:
         acl-token: anonymous
         enabled: true
+        # This context really is a single `data` key holding a YAML document
+        # (config/k-producer,test/data), so YAML is correct here. Note the consul/ext/other
+        # profiles deliberately omit this: their prefixes are provisioned by Terraform as
+        # individual subkeys, which is the default KEY_VALUE format. The format must match how
+        # each prefix was written, and these two differ.
         format: yaml
       discovery:
         health-check-interval: 15s

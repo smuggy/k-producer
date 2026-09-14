@@ -27,6 +27,13 @@ application {
     mainClass = "net.podspace.Main"
 }
 
+springBoot {
+    // Generates META-INF/build-info.properties, which the actuator serves from /actuator/info.
+    // Version and build time then come from the build itself rather than from an APP_VERSION
+    // environment variable the Dockerfile has to remember to pass through.
+    buildInfo()
+}
+
 tasks.register("cleanDockerDirTars", Delete) {
     delete fileTree(layout.buildDirectory.dir("docker")) {
         include "**/*.tar"
@@ -99,7 +106,7 @@ def requireMultiArchBuilder = {
 
 tasks.register("buildDockerImage", Exec) {
     workingDir layout.getBuildDirectory()
-    commandLine dockerExe, "build", "--build-arg", "APP_VERSION=${project.version}", "--tag", "${project.name}:${project.version}", "docker"
+    commandLine dockerExe, "build", "--tag", "${project.name}:${project.version}", "docker"
     doFirst { requireDocker() }
 }
 
@@ -132,7 +139,6 @@ tasks.register("pushMultiArchImage", Exec) {
     workingDir layout.getBuildDirectory()
     commandLine dockerExe, "buildx", "build",
             "--platform", dockerPlatforms,
-            "--build-arg", "APP_VERSION=${project.version}",
             "--tag", "mmckernan/${project.name}:${project.version}",
             "--push", "docker"
     doFirst {
@@ -170,7 +176,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-log4j2'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'org.springframework.cloud:spring-cloud-starter-consul-all'
+    // config + discovery only, deliberately NOT -consul-all: that also drags in Spring Cloud Bus
+    // and Spring Cloud Stream, which this application never uses and which failed to start under
+    // Boot 4 (eventService / inputBindingLifecycle), taking the whole consul profile down with it.
+    implementation 'org.springframework.cloud:spring-cloud-starter-consul-config'
+    implementation 'org.springframework.cloud:spring-cloud-starter-consul-discovery'
 
     // Boot 4 moved Kafka auto-config into its own starter; a bare spring-kafka no longer brings it.
     implementation 'org.springframework.boot:spring-boot-starter-kafka'

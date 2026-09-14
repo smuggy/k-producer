@@ -14,7 +14,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: k-producer
-        app.kubernetes.io/version: 0.5.0
+        app.kubernetes.io/version: 0.5.1
     spec:
       serviceAccountName: k-producer-sa
       automountServiceAccountToken: true
@@ -22,7 +22,7 @@ spec:
         kubernetes.io/os: linux
       containers:
         - name: k-producer-ctr
-          image: mmckernan/k-producer:0.5.0
+          image: mmckernan/k-producer:0.5.1
           ports:
             - containerPort: 8080
               name: http
@@ -57,3 +57,27 @@ spec:
             # here and risk an OOM kill while the heap still looks small.
             - name: JAVA_OPTS
               value: "-XX:MaxRAMPercentage=75.0"
+            # run.sh imports every PEM found here into a copy of the JVM trust store. Consul's
+            # HTTPS certificate is issued by a private CA the JVM does not ship with, and without
+            # this the config import fails with a misleading "resource does not exist".
+            - name: CONSUL_CA_DIR
+              value: /etc/ssl/consul-ca
+            - name: TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: k-producer-truststore
+                  key: password
+                  optional: true
+          volumeMounts:
+            - name: consul-ca
+              mountPath: /etc/ssl/consul-ca
+              readOnly: true
+      volumes:
+        # A CA certificate is public, so a ConfigMap is the right home - only the trust store
+        # password is a secret. Create it from the CA you actually issued Consul's cert from:
+        #   kubectl -n app-ns create configmap consul-ca \
+        #       --from-file=internal-ca.pem=path/to/internal_ca_cert.pem
+        - name: consul-ca
+          configMap:
+            name: consul-ca
+            optional: true

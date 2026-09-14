@@ -45,8 +45,6 @@ public class AppConfig {
     private static final String ECHO = "echo";
     private static final Logger logger = LoggerFactory.getLogger(AppConfig.class.getName());
 
-    @Value("${myapp.val}")
-    private String val;
     @Value("${myapp.kafka.topicName}")
     private String topicName;//="test-topic-one";
     /** Return topic for echo round trips. Required for the origin and echo roles, unused otherwise. */
@@ -127,15 +125,6 @@ public class AppConfig {
     /** Topic this instance consumes; the origin role listens on the return leg. */
     private String readerTopic() {
         return isRole(ORIGIN) ? echoTopicName : topicName;
-    }
-
-    @Bean
-    public MyBean beanInstance() {
-        logger.info("==> Creating bean instance with {}", val);
-
-        MyBean m = new MyBean();
-        m.setValue(val);
-        return m;
     }
 
     /**

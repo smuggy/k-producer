@@ -16,7 +16,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * fixes had to be applied twice and one copy was missing an early return. Owning it here means a
  * fix lands once.
  */
-public final class WorkerLoop {
+// Package-private on purpose: this is the pipeline's internal engine. Publisher,
+// Watcher and Relay are the faces the rest of the application uses, and they expose
+// only what callers need. Widening this later is easy; narrowing it would not be.
+final class WorkerLoop {
     private static final Logger logger = LoggerFactory.getLogger(WorkerLoop.class);
     private static final long SHUTDOWN_WAIT_SECONDS = 10;
     private static final long INITIAL_BACKOFF_MILLIS = 500;
