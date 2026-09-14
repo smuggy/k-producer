@@ -51,8 +51,15 @@ spec:
             privileged: false
             allowPrivilegeEscalation: false
           env:
+            # No profile by default: the bundled application.yaml runs standalone with no
+            # Consul. Set this to `test` or `consul` to pull configuration from Consul instead -
+            # and even then the import is `optional:`, so an unreachable Consul degrades to the
+            # bundled defaults rather than failing to start.
             - name: SPRING_PROFILES_ACTIVE
-              value: test
+              value: ""
+            # Spring searches ./config/ (the container's working directory is /), so an
+            # application.yaml mounted at /config/application.yaml is picked up automatically and
+            # overrides the copy baked into the jar. Nothing else to configure.
             # Container-aware defaults cap the heap at 25% of the limit, which would leave ~256Mi
             # here and risk an OOM kill while the heap still looks small.
             - name: JAVA_OPTS
@@ -62,17 +69,21 @@ spec:
             # this the config import fails with a misleading "resource does not exist".
             - name: CONSUL_CA_DIR
               value: /etc/ssl/consul-ca
-            - name: TRUSTSTORE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: k-producer-truststore
-                  key: password
-                  optional: true
           volumeMounts:
+            - name: app-config
+              mountPath: /config
+              readOnly: true
             - name: consul-ca
               mountPath: /etc/ssl/consul-ca
               readOnly: true
       volumes:
+        # Optional environment overrides. Create with, for example:
+        #   kubectl -n app-ns create configmap k-producer-config \
+        #       --from-file=application.yaml=my-overrides.yaml
+        - name: app-config
+          configMap:
+            name: k-producer-config
+            optional: true
         # A CA certificate is public, so a ConfigMap is the right home - only the trust store
         # password is a secret. Create it from the CA you actually issued Consul's cert from:
         #   kubectl -n app-ns create configmap consul-ca \

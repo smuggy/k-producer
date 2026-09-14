@@ -110,9 +110,120 @@ and create/consume messages from the web server capability.
 ./kafka-topics.sh --describe --bootstrap-server localhost:9092
 ```
 
+## Configuration
+
+The application runs anywhere with no external dependency. Everything it needs is bundled, and
+each further layer is optional — in particular **it starts and works without Consul**.
+
+Sources, lowest precedence first:
+
+| # | Source | Optional? | Use for |
+|---|--------|-----------|---------|
+| 1 | `application.yaml` inside the jar | always present | defaults that work standalone |
+| 2 | `/config/application.yaml` | yes | per-environment overrides (ConfigMap, bind mount) |
+| 3 | Consul KV | yes | centrally managed / shared configuration |
+| 4 | Environment variables and command-line args | yes | one-off overrides, secrets |
+
+Later layers override earlier ones, so you only supply what differs.
+
+### 1. Standalone
+
 ```shell
-export SPRING_PROFILES_ACTIVE=consul
+docker run -p 8080:8080 mmckernan/k-producer:0.5.1
 ```
+
+No profile, no mounts, no Consul. The bundled defaults point at `localhost:9092`, so nothing in
+the jar is tied to a particular network.
+
+### 2. External file
+
+Spring searches `./config/` and the container's working directory is `/`, so a file mounted at
+`/config/application.yaml` is picked up **automatically** — no `spring.config.location` needed.
+It layers on top of the bundled file rather than replacing it, so partial overrides are enough:
+
+```yaml
+# my-overrides.yaml — only what differs
+myapp:
+  az: us-east-2a
+  kafka:
+    bootstrapAddress: kafka-00:9092,kafka-01:9092,kafka-02:9092
+```
+
+```shell
+docker run -p 8080:8080 -v "$PWD/my-overrides.yaml":/config/application.yaml:ro \
+    mmckernan/k-producer:0.5.1
+
+kubectl -n app-ns create configmap k-producer-config \
+    --from-file=application.yaml=my-overrides.yaml
+```
+
+The deployment already mounts a `k-producer-config` ConfigMap if one exists.
+
+### 3. Consul
+
+Select a profile whose Consul endpoint you want:
+
+```shell
+export SPRING_PROFILES_ACTIVE=consul      # localhost:8500
+export SPRING_PROFILES_ACTIVE=test        # consul.ps.internal:8501 over https
+```
+
+Config is read from `config/k-producer,<profile>/`. Note the two profiles deliberately differ in
+format, because the underlying data differs: the `test` prefix holds a single `data` key
+containing a YAML document (`format: yaml`), while the Terraform-provisioned prefixes hold
+individual subkeys (the default KEY_VALUE format). **The format must match how the prefix was
+written.**
+
+**Consul is never required.** Three separate settings make that true, and all three are needed —
+each covers a different failure:
+
+| Setting                                          | Covers                        |
+|--------------------------------------------------|-------------------------------|
+| `spring.config.import: "optional:consul:…"`      | no configuration at that path |
+| `spring.cloud.consul.config.fail-fast: false`    | Consul unreachable            |
+| `spring.cloud.consul.discovery.fail-fast: false` | service registration failing  |
+
+With Consul down the application starts on the layers below it, `/actuator/health` reports
+`consul: DOWN` so the degradation is visible, but **liveness and readiness stay UP** — an optional
+dependency being absent should not restart the pod or pull it out of service.
+
+Consul serves HTTPS from a private CA. Drop the CA PEM into the directory named by
+`CONSUL_CA_DIR` (default `/etc/ssl/consul-ca`) and the entrypoint imports it into a copy of the
+JVM trust store at start-up. Mounting rather than baking it in means a CA rotation is a ConfigMap
+change and a restart:
+
+```shell
+kubectl -n app-ns create configmap consul-ca \
+    --from-file=internal-ca.pem=path/to/internal_ca_cert.pem
+```
+
+Without the CA the TLS handshake fails; Spring Cloud Consul reports this as
+`config data resource ... does not exist` rather than as a certificate error, which is misleading
+— check for `PKIX path building failed` in the log.
+
+### 4. Environment variables
+
+Relaxed binding maps any property to an environment variable, which is the right home for
+anything environment-specific or sensitive:
+
+```shell
+MYAPP_KAFKA_BOOTSTRAPADDRESS=kafka-00:9092
+MYAPP_ROLE=origin
+SPRING_CLOUD_CONSUL_CONFIG_ACL_TOKEN=...      # never put a real token in application.yaml,
+                                              # which is baked into the image
+```
+
+### Confirming where a value came from
+
+`/actuator/env/<property>` names the winning source and every candidate:
+
+```shell
+curl localhost:8080/actuator/env/myapp.kafka.topicName
+```
+
+Values are masked unless `management.endpoint.env.show-values` is set. A metric tag proves the
+value actually took effect rather than merely being present — for example the `topic` tag on
+`kproducer_producer_acknowledged_total`.
 
 ---
 ## Statistics

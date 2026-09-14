@@ -55,12 +55,11 @@ myapp:
     # latest = measure from now (correct for latency runs); earliest = read the whole backlog
     # first (use when checking for lost messages, and expect a large first-pass latency).
     autoOffsetReset: latest
-#    bootstrapAddress: kafka-00:9092,kafka-01:9092,kafka-02:9092
-    # TODO: bug - hardcoded LAN IP replacing loopback default breaks local dev for anyone off this network.
-    bootstrapAddress: 192.168.0.60:9092
+    # Deliberately a local default so a fresh checkout runs anywhere. Override per environment
+    # via an external config file, Consul, or MYAPP_KAFKA_BOOTSTRAPADDRESS - never by editing
+    # this file, which is baked into the jar.
+    bootstrapAddress: localhost:9092
     acks: "all"
-#    bootstrapAddress: 127.0.0.1:9092
-#    bootstrapAddress: localhost:9092
 ---
 spring:
   jmx:
@@ -99,7 +98,7 @@ spring:
   jmx:
     enabled: true
   config:
-    import: "consul:consul.ps.internal:8501"
+    import: "optional:consul:consul.ps.internal:8501"
     activate:
       on-profile: test
   application:
@@ -112,6 +111,10 @@ spring:
       config:
         acl-token: anonymous
         enabled: true
+        # `optional:` on the import covers "no config at that path"; this covers "cannot reach
+        # Consul at all". Both are needed for the app to run in an environment without Consul -
+        # it falls back to the configuration bundled in the jar and logs a warning.
+        fail-fast: false
         # This context really is a single `data` key holding a YAML document
         # (config/k-producer,test/data), so YAML is correct here. Note the consul/ext/other
         # profiles deliberately omit this: their prefixes are provisioned by Terraform as
@@ -119,6 +122,10 @@ spring:
         # each prefix was written, and these two differ.
         format: yaml
       discovery:
+        # Registration is a third, separate failure path: `optional:` covers a missing config
+        # path, config.fail-fast covers an unreachable config server, and this covers a failed
+        # service registration. All three are needed before Consul is genuinely optional.
+        fail-fast: false
         health-check-interval: 15s
         health-check-url: http://k-producer.ps.internal/actuator/health
 ---
@@ -143,7 +150,7 @@ spring:
   jmx:
     enabled: true
   config:
-    import: "consul:localhost:8500"
+    import: "optional:consul:localhost:8500"
     activate:
       on-profile: consul
   application:
@@ -156,7 +163,13 @@ spring:
       config:
         acl-token: anonymous
         enabled: true
+        # `optional:` on the import covers "no config at that path"; this covers "cannot reach
+        # Consul at all". Both are needed for the app to run in an environment without Consul -
+        # it falls back to the configuration bundled in the jar and logs a warning.
+        fail-fast: false
       discovery:
+        # See the note in the test profile: registration failure is its own fail-fast switch.
+        fail-fast: false
         tags: app
         health-check-interval: 15s
         health-check-url: http://app.podspace.internal:${server.port}/actuator/health
