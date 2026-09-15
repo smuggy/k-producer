@@ -135,6 +135,19 @@ docker run -p 8080:8080 mmckernan/k-producer:0.5.1
 No profile, no mounts, no Consul. The bundled defaults point at `localhost:9092`, so nothing in
 the jar is tied to a particular network.
 
+`scripts/run-docker.sh` wraps the common invocations, builds the image if it is missing, waits for
+health and prints the useful URLs. It takes the image tag from `build.gradle`, so it cannot drift
+from the build:
+
+```shell
+./scripts/run-docker.sh                                    # standalone, in-memory queue
+./scripts/run-docker.sh --broker 192.168.0.60:9092 --start # against Kafka, publishing immediately
+./scripts/run-docker.sh --profile test --ca ../vpcs/secrets/internal_ca_cert.pem
+./scripts/run-docker.sh --config my-overrides.yaml         # mounts at /config
+./scripts/run-docker.sh logs | status | stop
+./scripts/run-docker.sh --help
+```
+
 ### 2. External file
 
 Spring searches `./config/` and the container's working directory is `/`, so a file mounted at

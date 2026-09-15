@@ -38,7 +38,7 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
     /**
      * Whether this consumer currently holds a partition assignment. Maintained from the rebalance
      * callbacks, which run on the polling thread, rather than by calling consumer.assignment():
-     * KafkaConsumer permits only single-threaded access, so querying it from a health-check
+     * KafkaConsumer permits only single-threaded access, so querying it from a health check
      * request thread would throw ConcurrentModificationException.
      */
     private volatile boolean assigned;

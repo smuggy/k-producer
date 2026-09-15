@@ -64,15 +64,12 @@ class WorkerLoopTest {
     }
 
     @Test
-    void teardownStopsAFailingLoopAndRunsTheExitHook() throws Exception {
+    void teardownStopsAFailingLoop() throws Exception {
         CountDownLatch failed = new CountDownLatch(1);
-        AtomicInteger exitHookRuns = new AtomicInteger();
-        WorkerLoop loop = new WorkerLoop("stoppable", 50,
-                () -> {
-                    failed.countDown();
-                    throw new IllegalStateException("still broken");
-                },
-                exitHookRuns::incrementAndGet);
+        WorkerLoop loop = new WorkerLoop("stoppable", 50, () -> {
+            failed.countDown();
+            throw new IllegalStateException("still broken");
+        });
 
         loop.initiate();
         Assertions.assertTrue(failed.await(5, TimeUnit.SECONDS));
@@ -83,7 +80,6 @@ class WorkerLoopTest {
 
         Assertions.assertTrue(elapsedMillis < 15_000,
                 "teardown of a failing loop took " + elapsedMillis + "ms");
-        Assertions.assertEquals(1, exitHookRuns.get(), "exit hook should run exactly once");
     }
 
     @Test

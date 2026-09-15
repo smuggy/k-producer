@@ -69,6 +69,15 @@ spec:
             # this the config import fails with a misleading "resource does not exist".
             - name: CONSUL_CA_DIR
               value: /etc/ssl/consul-ca
+            # Explicit rather than relying on HOSTNAME happening to be the pod name: the downward
+            # API states the intent, and survives any change in how the runtime sets HOSTNAME.
+            - name: MYAPP_INSTANCE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # Real zone comes from the node; overriding per-deployment is fine too.
+            - name: MYAPP_AZ
+              value: "lab"
           volumeMounts:
             - name: app-config
               mountPath: /config

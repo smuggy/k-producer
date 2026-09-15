@@ -38,7 +38,6 @@ final class WorkerLoop {
     private final String name;
     private final long pauseMillis;
     private final Task task;
-    private final Runnable onExit;
 
     // Written by request threads, read by the worker thread; volatile supplies the happens-before
     // edge so that stop and pause are actually observed by the running loop.
@@ -53,18 +52,14 @@ final class WorkerLoop {
     private boolean started;
     private ExecutorService pool;
 
+    // Deliberately no exit hook. There was one, used by Watcher to close its reader when the loop
+    // stopped - which broke restart, because the reader is a container-managed singleton that
+    // outlives any one start/stop cycle. Resources whose lifetime exceeds the loop's should be
+    // closed by whoever owns them, not from here.
     public WorkerLoop(String name, long pauseMillis, Task task) {
-        this(name, pauseMillis, task, () -> { });
-    }
-
-    /**
-     * @param onExit run once when the loop finishes, however it finishes.
-     */
-    public WorkerLoop(String name, long pauseMillis, Task task, Runnable onExit) {
         this.name = name;
         this.pauseMillis = pauseMillis;
         this.task = task;
-        this.onExit = onExit;
     }
 
     public void pause() {
@@ -155,7 +150,6 @@ final class WorkerLoop {
                 }
             }
         } finally {
-            onExit.run();
             logger.info("{}: loop done.", name);
         }
     }

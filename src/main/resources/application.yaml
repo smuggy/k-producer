@@ -42,6 +42,11 @@ myapp:
   # Availability zone this instance runs in; tagged onto every metric so an origin in one zone and
   # an echo in another can be compared. Set per deployment.
   az: unknown
+  # Identifies this instance on every metric. Defaults to the container hostname - the pod name
+  # under Kubernetes, the container id under Docker - and falls back to "unknown" when running
+  # outside a container, where HOSTNAME is usually not exported to the JVM. Declared here rather
+  # than left implicit in MetricsConfig so the property is discoverable.
+  instance: ${HOSTNAME:unknown}
   publisher:
     messageCount: 5
     sleep: 10
