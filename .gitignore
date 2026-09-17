@@ -48,7 +48,6 @@ bin/
 # .terraform.lock.hcl is deliberately NOT ignored: HashiCorp recommends committing the
 # provider lock file so every machine and CI run resolves identical provider versions.
 .terraform/
-.terraform.lock.hcl
 terraform.tfstate*
 # Variable files are the usual home for tokens once they move out of providers.tf.
 *.tfvars
@@ -61,5 +60,7 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
+# Keep this entry: the script exports a live Consul ACL token in plain text, so it must stay
+# untracked. terraform/apply-local-net.sh.example carries the invocation without the secret.
 apply-local-net.sh
 

@@ -22,7 +22,7 @@ Run with a specific Spring profile (controls config source — see Configuration
 SPRING_PROFILES_ACTIVE=consul ./gradlew bootRun
 ```
 
-Docker/deploy chain (Gradle tasks in `build.gradle`, run in this dependency order): `prepareDockerDir` → `copyTarToDockerDir` (depends on `build`) → `buildDockerImage` → `tagDockerImage` → `pushDockerImage`. Kubernetes manifests live in `deploy/` (kustomize); Terraform config lives in `src/main/terraform/`.
+Docker/deploy chain (Gradle tasks in `build.gradle`, run in this dependency order): `prepareDockerDir` → `copyTarToDockerDir` (depends on `build`) → `buildDockerImage` → `tagDockerImage` → `pushDockerImage`. Kubernetes manifests live in `deploy/` (kustomize); Terraform config lives in `terraform/`.
 
 ## Architecture
 

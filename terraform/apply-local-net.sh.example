@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#
+# Applies the Consul KV configuration for the local-net-1 datacenter.
+#
+# Copy to apply-local-net.sh and fill in a token with write access to the config/ prefix.
+# That filename is gitignored precisely so the token never reaches the repository - do not
+# rename this copy or remove the ignore entry.
+#
+set -euo pipefail
+
+export CONSUL_HTTP_TOKEN='---put valid token here---'
+
+tofu init
+tofu apply -auto-approve
