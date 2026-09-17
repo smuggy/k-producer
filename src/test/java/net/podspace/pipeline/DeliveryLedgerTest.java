@@ -142,6 +142,39 @@ class DeliveryLedgerTest {
         Assertions.assertEquals(total - 1, s.received(), "a late arrival is not a new one");
     }
 
+    /**
+     * Regression: the window used to advance by at most WINDOW per call, so a jump larger than the
+     * window left the bitset index out of range and silently dropped the skipped sequences from
+     * the accounting - making the ledger under-report loss, the one direction it must never err in.
+     * A consumer stopped while the publisher ran on, then resuming at `latest`, does exactly this.
+     */
+    @Test
+    void accountsForEverySequenceWhenTheConsumerFallsFurtherBehindThanTheWindow() {
+        int total = DeliveryLedger.WINDOW * 3;
+        produce(total);
+        ledger.received(ledger.getRunId(), total - 1); // only the very last message arrives
+        ledger.finalizeOutstanding();
+
+        DeliveryLedger.Snapshot s = ledger.snapshot();
+        Assertions.assertEquals(total, s.produced());
+        Assertions.assertEquals(1, s.received());
+        Assertions.assertEquals(total - 1, s.missing(), "every unreceived sequence must be reported lost");
+        Assertions.assertEquals(s.produced(), s.missing() + s.received(),
+                "every produced sequence must end up either received or missing");
+    }
+
+    /** The same gap, but settled by finalize alone rather than by a slide. */
+    @Test
+    void finalizeSettlesSequencesIssuedBeyondTheWindow() {
+        int total = DeliveryLedger.WINDOW * 2 + 500;
+        produce(total);
+        ledger.finalizeOutstanding(); // nothing ever arrived
+
+        DeliveryLedger.Snapshot s = ledger.snapshot();
+        Assertions.assertEquals(total, s.missing(), "a run where nothing arrived is a total loss");
+        Assertions.assertEquals(0, s.received());
+    }
+
     @Test
     void sequencesAreUniqueUnderConcurrentPublishers() throws Exception {
         int threads = 4;

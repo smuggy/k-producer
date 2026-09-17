@@ -131,22 +131,41 @@ public class DeliveryLedger {
         }
     }
 
-    /** Grows the window past `seq`, settling anything that drops off the back as missing. */
+    /**
+     * Moves the window so it ends at `seq`, settling everything it passes over as missing.
+     *
+     * <p>The jump can exceed the window entirely - a consumer that was stopped while the publisher
+     * ran on, then resumed at `latest`, reports a sequence far beyond windowStart. Sequences in
+     * that gap were never recorded in the bitset at all, so they cannot be checked bit by bit;
+     * they are counted arithmetically instead. Sliding only one window's worth per call used to
+     * leave both the bitset index out of range and those sequences unaccounted for, which made the
+     * ledger under-report loss.
+     */
     private void slideTo(long seq) {
-        long overshoot = seq - windowStart - WINDOW + 1;
-        if (overshoot <= 0) {
+        long newStart = seq - WINDOW + 1;
+        if (newStart <= windowStart) {
             return;
         }
-        int shift = (int) Math.min(overshoot, WINDOW);
         long issued = produced.get();
-        for (int i = 0; i < shift; i++) {
-            // Only sequences we actually issued can be missing.
-            if (!seen.get(i) && (windowStart + i) < issued) {
+        long bitsetEnd = windowStart + WINDOW;   // exclusive
+
+        // Sequences still represented in the bitset: settle the ones never seen.
+        long checkTo = Math.min(newStart, bitsetEnd);
+        for (long s = windowStart; s < checkTo; s++) {
+            if (!seen.get((int) (s - windowStart)) && s < issued) {
                 missing++;
             }
         }
-        seen = seen.get(shift, WINDOW);
-        windowStart += shift;
+        // Sequences the window skipped over entirely were never recorded, so none can have
+        // arrived. Only those actually issued count as lost.
+        long unrecordedTo = Math.min(newStart, issued);
+        if (unrecordedTo > bitsetEnd) {
+            missing += unrecordedTo - bitsetEnd;
+        }
+
+        long shift = newStart - windowStart;
+        seen = (shift >= WINDOW) ? new BitSet(WINDOW) : seen.get((int) shift, WINDOW);
+        windowStart = newStart;
     }
 
     /**
@@ -156,11 +175,16 @@ public class DeliveryLedger {
     public void finalizeOutstanding() {
         synchronized (lock) {
             long issued = produced.get();
-            long limit = Math.min(issued, windowStart + WINDOW);
-            for (long s = windowStart; s < limit; s++) {
+            long bitsetEnd = windowStart + WINDOW;   // exclusive
+            for (long s = windowStart; s < Math.min(issued, bitsetEnd); s++) {
                 if (!seen.get((int) (s - windowStart))) {
                     missing++;
                 }
+            }
+            // Same as slideTo: anything issued beyond the bitset was never recorded and so was
+            // never received. Counting only the bitset here under-reported loss.
+            if (issued > bitsetEnd) {
+                missing += issued - bitsetEnd;
             }
             seen = new BitSet(WINDOW);
             windowStart = Math.max(windowStart, issued);

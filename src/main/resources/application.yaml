@@ -19,10 +19,15 @@ management:
         # Liveness deliberately excludes the relay: a relay in backoff means the brokers are
         # unreachable, not that this process is broken. Restarting on that would produce restart
         # storms during the very outage being measured.
+        # `include` is a Set<String>, so list syntax rather than a comma-separated string:
+        # relaxed binding accepts both, but only this form type-checks in an IDE.
         liveness:
-          include: livenessState
+          include:
+            - livenessState
         readiness:
-          include: readinessState, relay
+          include:
+            - readinessState
+            - relay
   observations:
     annotations:
       enabled: true

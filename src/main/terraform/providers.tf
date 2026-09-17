@@ -12,6 +12,17 @@ provider consul {
   datacenter = "local-net-1"
 }
 
+# provider consul {
+#   address    = "prometheus.podspace.net:443"
+#   header {
+#     name  = "X-Consul-Prefix"
+#     value = "/consul"
+#   }
+#   scheme     = "https"
+#   token = "64d1cb58-9e91-022c-3640-d3d21cd69d13"
+#   datacenter = "us-east-2"
+# }
+
 #terraform {
 #  required_providers {
 #    kafka = {
