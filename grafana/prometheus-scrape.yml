@@ -1,0 +1,23 @@
+# Add to the `scrape_configs:` list in prometheus.yml on prometheus.ps.internal (192.168.0.61),
+# then reload:  curl -X POST http://localhost:9090/-/reload
+#
+# The application runs in Kubernetes with a ClusterIP service, so the ingress is the only route
+# in from outside the cluster. Prometheus and the ingress sit on the same subnet
+# (192.168.0.61 -> 192.168.0.62), so this needs no extra routing.
+
+  - job_name: k-producer
+    metrics_path: /actuator/prometheus
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: ['k-producer.ps.internal:80']
+        labels:
+          cluster: local-net-1
+
+    # The application tags every metric with `instance` (the pod name, from the downward API).
+    # That collides with the target label Prometheus attaches, so Prometheus renames the
+    # application's copy to `exported_instance` - which is what the dashboard filters on by
+    # default. Setting honor_labels: true here would instead let the pod name win and remove
+    # `exported_instance`; if you do that, switch the dashboard's "Instance label" variable to
+    # `instance` to match.
+    honor_labels: false

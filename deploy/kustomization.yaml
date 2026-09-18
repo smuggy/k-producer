@@ -10,3 +10,13 @@ resources:
   - ingress.yaml
   - service_account.yaml
   - rbac.yaml
+
+# Generated rather than handwritten so the name carries a hash of the content. Kustomize rewrites
+# the volume reference in deployment.yaml to match, which means editing config/application.yaml
+# changes the ConfigMap name and therefore rolls the pods. That matters here: the application reads
+# its configuration once at start-up, so an edit to a fixed-name ConfigMap would sit unread until
+# someone remembered to restart.
+configMapGenerator:
+  - name: k-producer-config
+    files:
+      - application.yaml=config/application.yaml

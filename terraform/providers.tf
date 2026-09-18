@@ -8,7 +8,7 @@
 provider consul {
   address    = "consul.ps.internal:8501"
   scheme     = "https"
-  token      = "---put valid token here---"
+#  token      = "---put valid token here---"
   datacenter = "local-net-1"
 }
 
@@ -19,7 +19,7 @@ provider consul {
 #     value = "/consul"
 #   }
 #   scheme     = "https"
-#   token = "64d1cb58-9e91-022c-3640-d3d21cd69d13"
+#   token = "----"
 #   datacenter = "us-east-2"
 # }
 

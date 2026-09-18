@@ -1,0 +1,12 @@
+# Environment overrides for this cluster. Layered on top of the application.yaml baked into the
+# jar, so only what differs from the bundled defaults belongs here - see the configuration table
+# in README.md.
+#
+# The bundled default is localhost:9092, deliberately, so a fresh checkout runs anywhere. That
+# default is also why a missing ConfigMap does not fail the pod: it starts, finds no broker at
+# localhost, and every send times out. Keeping this file in the repo is what stops that being
+# something you discover from the metrics.
+myapp:
+  kafka:
+    bootstrapAddress: 192.168.0.60:9092
+    topicName: test-topic-one
