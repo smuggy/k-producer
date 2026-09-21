@@ -24,7 +24,18 @@ Not done:
 
 * avro schema for the message payload
 * JSON output from the interactive endpoints (verification mode covers the scripted case)
-* topic administration — both topics must already exist, or the brokers must allow auto-creation
+* topic administration — both topics must already exist, or the brokers must allow auto-creation.
+  Two routes, and they are not alternatives so much as different scopes:
+  * **Terraform** (`terraform/`) already declares the topic names, as Consul config values across
+    the `ext`, `consul` and `other` profiles — six of them counting the echo topics — but creates
+    none of them. The `Mongey/kafka` provider and a `kafka_topic` resource are sketched out and
+    commented in `providers.tf` and `main.tf`; finishing them would mean the topic and the
+    configuration that names it are provisioned from one place, in step, with partition count and
+    replication factor declared rather than whatever a hand-typed `--create` happened to use. That
+    matters here: the topics this tool has been run against were RF=1, which makes a broker-failure
+    test a data-loss event rather than a failover test.
+  * **`KafkaAdmin` in the application**, for creating a topic on demand at start-up. Useful for
+    throwaway runs against a cluster you do not own the terraform for.
 * SASL/TLS to the brokers: the Kafka client configuration is built in code and has no passthrough
   for security properties, so only PLAINTEXT is reachable today
 * measuring how long recovery takes after an outage, as distinct from detecting one
