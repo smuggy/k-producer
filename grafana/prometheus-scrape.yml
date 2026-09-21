@@ -14,10 +14,8 @@
         labels:
           cluster: local-net-1
 
-    # The application tags every metric with `instance` (the pod name, from the downward API).
-    # That collides with the target label Prometheus attaches, so Prometheus renames the
-    # application's copy to `exported_instance` - which is what the dashboard filters on by
-    # default. Setting honor_labels: true here would instead let the pod name win and remove
-    # `exported_instance`; if you do that, switch the dashboard's "Instance label" variable to
-    # `instance` to match.
+    # The application emits its instance identity as `probe_instance` (the pod name, from the
+    # downward API) specifically so it does not collide with the `instance` label Prometheus
+    # attaches below. Both labels therefore survive: `instance` is the scrape target, and
+    # `probe_instance` is the pod. No renaming to `exported_instance` occurs.
     honor_labels: false

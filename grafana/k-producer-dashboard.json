@@ -2584,12 +2584,17 @@
         "name": "instance_label",
         "label": "Instance label",
         "type": "custom",
-        "query": "exported_instance, instance",
+        "query": "probe_instance, exported_instance, instance",
         "options": [
+          {
+            "text": "probe_instance",
+            "value": "probe_instance",
+            "selected": true
+          },
           {
             "text": "exported_instance",
             "value": "exported_instance",
-            "selected": true
+            "selected": false
           },
           {
             "text": "instance",
@@ -2598,13 +2603,13 @@
           }
         ],
         "current": {
-          "text": "exported_instance",
-          "value": "exported_instance",
+          "text": "probe_instance",
+          "value": "probe_instance",
           "selected": true
         },
         "multi": false,
         "includeAll": false,
-        "description": "The app tags every metric with `instance`, which collides with the target label Prometheus adds. A default scrape renames the app's copy to exported_instance; switch to `instance` if you scrape with honor_labels: true."
+        "description": "The application emits its instance identity as `probe_instance`, chosen to avoid colliding with the `instance` label Prometheus attaches for the scrape target. Select `exported_instance` to read data scraped before that rename, or `instance` if you scrape with honor_labels: true."
       },
       {
         "name": "role",

@@ -51,6 +51,10 @@ myapp:
   # under Kubernetes, the container id under Docker - and falls back to "unknown" when running
   # outside a container, where HOSTNAME is usually not exported to the JVM. Declared here rather
   # than left implicit in MetricsConfig so the property is discoverable.
+  #
+  # Emitted as the metric label `probe_instance`, NOT `instance`: Prometheus attaches its own
+  # `instance` label for the scrape target, and a collision gets ours silently renamed to
+  # `exported_instance`. See MetricsConfig.
   instance: ${HOSTNAME:unknown}
   publisher:
     messageCount: 5
@@ -65,6 +69,11 @@ myapp:
     # latest = measure from now (correct for latency runs); earliest = read the whole backlog
     # first (use when checking for lost messages, and expect a large first-pass latency).
     autoOffsetReset: latest
+    # Ceiling on how long a single send may block before throwing. Kafka defaults to 60000, which
+    # leaves a broker outage invisible to health for a full minute - the send blocks, nothing
+    # throws, and the worker loop records no failure. Lower it further to detect faster, raise it
+    # if a slow metadata refresh is being mistaken for an outage.
+    maxBlockMs: 10000
     # Deliberately a local default so a fresh checkout runs anywhere. Override per environment
     # via an external config file, Consul, or MYAPP_KAFKA_BOOTSTRAPADDRESS - never by editing
     # this file, which is baked into the jar.

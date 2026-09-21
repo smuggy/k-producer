@@ -4,6 +4,7 @@ import net.podspace.messaging.MessageGenerator;
 import net.podspace.pipeline.DeliveryLedger;
 
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class TemperatureGenerator implements MessageGenerator {
     private static final Random RANDOM = new Random();
@@ -11,8 +12,9 @@ public class TemperatureGenerator implements MessageGenerator {
     private static final int LEFT_LIMIT = 48;   // numeral '0'
     private static final int RIGHT_LIMIT = 122; // letter 'z'
     // Set from request threads via /publisher/raisefillersize, read by the publisher worker
-    // thread; volatile supplies the happens-before edge.
-    private volatile int fillerSize = 0;
+    // thread. Atomic rather than volatile: volatile makes each read and each write atomic, but
+    // not the read-modify-write that a relative adjustment needs.
+    private final AtomicInteger fillerSize = new AtomicInteger();
     private final DeliveryLedger ledger;
 
     public TemperatureGenerator(DeliveryLedger ledger) {
@@ -28,22 +30,34 @@ public class TemperatureGenerator implements MessageGenerator {
     }
 
     public int getFillerSize() {
-        return fillerSize;
+        return fillerSize.get();
     }
 
     public void setFillerSize(int size) {
+        fillerSize.set(clamp(size));
+    }
+
+    @Override
+    public int adjustFillerSize(int delta) {
+        // Widen before adding: current + delta overflows int for a large delta, wrapping negative
+        // and clamping to zero - so raising the size by a huge amount would silently set it to
+        // nothing instead of saturating at the cap.
+        return fillerSize.updateAndGet(current -> clamp((long) current + delta));
+    }
+
+    /** Keeps the size inside [0, MAX_FILLER_SIZE]; shared by the absolute and relative setters. */
+    private static int clamp(long size) {
         if (size < 0) {
-            fillerSize = 0;
-        } else {
-            fillerSize = Math.min(size, MAX_FILLER_SIZE);
+            return 0;
         }
+        return (int) Math.min(size, MAX_FILLER_SIZE);
     }
 
     private String generateFiller() {
-        // Read the volatile field once: reading it separately for the guard and the limit would
-        // let a concurrent setFillerSize() change the value in between, producing a filler that
-        // does not match the size that was checked.
-        int size = fillerSize;
+        // Read once: reading separately for the guard and the limit would let a concurrent
+        // adjustment change the value in between, producing a filler that does not match the
+        // size that was checked.
+        int size = fillerSize.get();
         if (size <= 0) {
             return "";
         }

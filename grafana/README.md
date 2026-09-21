@@ -44,13 +44,15 @@ service).
 
 ## Two things to know before trusting a panel
 
-**1. The `instance` label is renamed on scrape.** The application tags every metric with
-`instance`, which collides with the target label Prometheus attaches. With the default
-`honor_labels: false`, Prometheus keeps its own and renames the application's to
-`exported_instance`. The dashboard therefore filters on `exported_instance`, exposed as the
-**Instance label** variable — switch it to `instance` if you scrape with `honor_labels: true`.
-Every query interpolates that variable, so it is a single switch rather than an edit across 69
-queries.
+**1. The instance identity is `probe_instance`, not `instance`.** Prometheus attaches its own
+`instance` label naming the scrape target, so a metric exposing that name collides and — with the
+default `honor_labels: false` — gets silently renamed to `exported_instance`. A dashboard
+filtering on `instance` would then select the target rather than the pod. The application
+therefore emits `probe_instance`, which cannot collide, and the dashboard filters on that.
+
+The **Instance label** variable still offers `exported_instance` and `instance` for reading data
+scraped before the rename, or for a scrape configured with `honor_labels: true`. Every query
+interpolates it, so it is a single switch rather than an edit across 69 queries.
 
 **2. Latency panels include messages from earlier runs.** The reconciliation counters exclude
 foreign messages by run id; the latency timer does not. A consumer resuming from committed

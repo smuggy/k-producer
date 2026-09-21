@@ -76,6 +76,14 @@ public class AppConfig {
     // Defaults to "all" so an environment that omits the key still exercises replication. With
     // acks=0 the producer does not wait for even a leader acknowledgement, which makes any
     // durability or delivery check meaningless.
+    // How long a send may block before it throws. Kafka's own default is 60s, which on this
+    // probe means a broker outage produces no signal at all for a full minute: the send sits
+    // inside max.block.ms, nothing throws, so WorkerLoop records no failure and health still
+    // reports UP. Ten seconds is long enough for an ordinary metadata refresh and short enough
+    // that an outage surfaces while it is still happening - which is the whole point of the tool.
+    @Value("${myapp.kafka.maxBlockMs:10000}")
+    private int maxBlockMs;
+
     @Value("${myapp.kafka.acks:all}")
     private String acksConfig;
     @Value("${myapp.publisher.sleep:10}")
@@ -196,6 +204,9 @@ public class AppConfig {
                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                 StringSerializer.class);
         configProps.put(ProducerConfig.ACKS_CONFIG, acksConfig);
+        // Bounded and single-attempt, so the retry decision stays with WorkerLoop - only the loop
+        // can see the quit flag. See the blocking-call rule in CLAUDE.md.
+        configProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs);
         ProducerFactory<String, String> pf = new DefaultKafkaProducerFactory<>(configProps);
         pf.addListener(new MicrometerProducerListener<>(this.meterRegistry));
         return pf;
