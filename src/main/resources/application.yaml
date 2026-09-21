@@ -13,7 +13,9 @@ management:
       probes:
         enabled: true
       # The relay contributor only exists in the echo role, so the readiness group would fail
-      # validation in every other role.
+      # validation in every other role. The cost is that a renamed or missing contributor is
+      # tolerated silently rather than failing startup - check /actuator/health/readiness lists
+      # what you expect after renaming any of them.
       validate-group-membership: false
       group:
         # Liveness deliberately excludes the relay: a relay in backoff means the brokers are
@@ -24,9 +26,15 @@ management:
         liveness:
           include:
             - livenessState
+        # One contributor per pipeline engine. publisher and consumer exist in every role; relay
+        # only in the echo role, which is what validate-group-membership above tolerates. An
+        # engine that has not been started reports UP - it is idle, not broken, and a pod whose
+        # readiness depended on a manual /publisher/start could never become ready at all.
         readiness:
           include:
             - readinessState
+            - publisher
+            - consumer
             - relay
   observations:
     annotations:
@@ -74,6 +82,11 @@ myapp:
     # throws, and the worker loop records no failure. Lower it further to detect faster, raise it
     # if a slow metadata refresh is being mistaken for an outage.
     maxBlockMs: 10000
+    # Ceiling on how long an accepted record may go unacknowledged before the send is failed.
+    # Kafka defaults to 120000, so a record buffered just before an outage takes two minutes to
+    # report. Must be at least linger.ms + request.timeout.ms; with Kafka 4 defaults that is
+    # 5 + 30000 = 30005, not 30000 - setting it too low makes every send throw ConfigException.
+    deliveryTimeoutMs: 40000
     # Deliberately a local default so a fresh checkout runs anywhere. Override per environment
     # via an external config file, Consul, or MYAPP_KAFKA_BOOTSTRAPADDRESS - never by editing
     # this file, which is baked into the jar.

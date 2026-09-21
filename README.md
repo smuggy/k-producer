@@ -164,7 +164,7 @@ myapp:
 
 ```shell
 docker run -p 8080:8080 -v "$PWD/my-overrides.yaml":/config/application.yaml:ro \
-    mmckernan/k-producer:0.5.1
+    mmckernan/k-producer:0.5.2
 
 kubectl -n app-ns create configmap k-producer-config \
     --from-file=application.yaml=my-overrides.yaml

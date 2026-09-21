@@ -1,5 +1,6 @@
 package net.podspace.pipeline;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import net.podspace.messaging.MessageGenerator;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,7 @@ class PublisherAdjustTest {
     /** Minimal generator - the filler size is the only part the publisher delegates. */
     private static class FakeGenerator implements MessageGenerator {
         private final AtomicInteger filler = new AtomicInteger();
-        @Override public String createMessage() { return "{}"; }
+        @Override public Generated createMessage() { return Generated.untracked("{}"); }
         @Override public void setFillerSize(int size) { filler.set(Math.max(0, size)); }
         @Override public int getFillerSize() { return filler.get(); }
         @Override public int adjustFillerSize(int delta) {
@@ -29,7 +30,8 @@ class PublisherAdjustTest {
     }
 
     private static Publisher publisher() {
-        return new Publisher(new FakeGenerator(), m -> { });
+        return new Publisher(new FakeGenerator(), m -> { },
+                new DeliveryLedger(new SimpleMeterRegistry()));
     }
 
     /** Runs `threads` x `each` concurrent operations, returning once they have all finished. */

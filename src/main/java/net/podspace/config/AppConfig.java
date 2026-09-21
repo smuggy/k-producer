@@ -84,6 +84,19 @@ public class AppConfig {
     @Value("${myapp.kafka.maxBlockMs:10000}")
     private int maxBlockMs;
 
+    // The other half of the slow-failure problem. maxBlockMs bounds a send that cannot even be
+    // buffered; this bounds one that WAS buffered and is never acknowledged - Kafka defaults that
+    // to 120s, so a record accepted just before an outage takes two minutes to report.
+    //
+    // Kafka rejects delivery.timeout.ms < linger.ms + request.timeout.ms. Do NOT assume that floor
+    // is 30000: Kafka 4 changed the linger.ms default from 0 to 5, so the real minimum is 30005,
+    // and a value of exactly 30000 makes the producer throw ConfigException on construction. The
+    // factory builds the producer lazily, so that surfaces as every send failing at runtime rather
+    // than as a startup error - it cost a full test run to find. 40s leaves headroom for a
+    // moderate linger or request timeout without needing this recalculated.
+    @Value("${myapp.kafka.deliveryTimeoutMs:40000}")
+    private int deliveryTimeoutMs;
+
     @Value("${myapp.kafka.acks:all}")
     private String acksConfig;
     @Value("${myapp.publisher.sleep:10}")
@@ -207,6 +220,7 @@ public class AppConfig {
         // Bounded and single-attempt, so the retry decision stays with WorkerLoop - only the loop
         // can see the quit flag. See the blocking-call rule in CLAUDE.md.
         configProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs);
+        configProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
         ProducerFactory<String, String> pf = new DefaultKafkaProducerFactory<>(configProps);
         pf.addListener(new MicrometerProducerListener<>(this.meterRegistry));
         return pf;
@@ -249,7 +263,7 @@ public class AppConfig {
     @Bean
     public Publisher publisher() {
         var producer = new TemperatureGenerator(deliveryLedger());
-        var publisher = new Publisher(producer, messageWriter());
+        var publisher = new Publisher(producer, messageWriter(), deliveryLedger());
         publisher.setSleep(sleepConfig);
         publisher.setFillerSize(fillerSize);
         publisher.setMessages(messageCount);
@@ -282,6 +296,33 @@ public class AppConfig {
         Relay relay = new Relay(reader, writer, meterRegistry);
         relay.initiate();
         return relay;
+    }
+
+    /*
+     * Readiness contributors, one per engine. Spring derives the contributor id from the bean name
+     * by stripping the "HealthIndicator" suffix, giving "publisher", "consumer" and "relay" - the
+     * keys the readiness group in application.yaml lists. The names deliberately differ from the
+     * engine beans themselves (publisher, watcher, relay); reusing "relay" for the indicator once
+     * collided with the Relay bean and stopped the echo role starting at all.
+     *
+     * The publisher and watcher contributors are registered in every role. In the echo role those
+     * engines are never started, so they report running:false and UP, which costs nothing and
+     * avoids a second conditional that could drift out of step with the engines'.
+     */
+    @Bean
+    public PipelineHealthIndicator publisherHealthIndicator(Publisher publisher) {
+        return new PipelineHealthIndicator(publisher);
+    }
+
+    @Bean
+    public PipelineHealthIndicator consumerHealthIndicator(Watcher<Temperature> watcher) {
+        return new PipelineHealthIndicator(watcher);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "myapp.role", havingValue = ECHO)
+    public PipelineHealthIndicator relayHealthIndicator(Relay relay) {
+        return new PipelineHealthIndicator(relay);
     }
 
     @Bean

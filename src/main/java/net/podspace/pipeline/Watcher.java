@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
-public class Watcher<T extends Comparable<T>> {
+public class Watcher<T extends Comparable<T>> implements EngineStatus {
     private static final Logger logger = LoggerFactory.getLogger(Watcher.class);
     private static final long PAUSE_MILLIS = 5_000;
     private final MessageConsumer<T> consumer;
@@ -55,6 +55,32 @@ public class Watcher<T extends Comparable<T>> {
 
     public void resume() {
         loop.resume();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return loop.isRunning();
+    }
+
+    @Override
+    public boolean isHealthy() {
+        return loop.isHealthy();
+    }
+
+    /** Whether the inbound side is actually attached; see MessageReader.isReady(). */
+    @Override
+    public boolean isAttached() {
+        return reader.isReady();
+    }
+
+    @Override
+    public long getTotalFailures() {
+        return loop.getTotalFailures();
+    }
+
+    @Override
+    public String getLastFailure() {
+        return loop.getLastFailure();
     }
 
     /** One pass: read whatever is available and record a latency sample for each parsed message. */

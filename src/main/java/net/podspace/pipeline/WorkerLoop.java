@@ -194,6 +194,15 @@ final class WorkerLoop {
     }
 
     /**
+     * Whether the loop has been started and not torn down. Synchronized to match the lifecycle
+     * methods that own this flag. An engine that was never started is idle, not broken - health
+     * reporting needs to tell those apart.
+     */
+    public synchronized boolean isRunning() {
+        return started;
+    }
+
+    /**
      * Sleeps for the given time, returning false if the thread was interrupted - which, given
      * teardown()'s escalation, means "stop now".
      */

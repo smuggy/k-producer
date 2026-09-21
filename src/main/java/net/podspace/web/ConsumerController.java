@@ -137,6 +137,18 @@ public class ConsumerController {
             logger.info("Skipping message with no usable timestamp.");
             return;
         }
+        // Latency is only meaningful for messages this run produced. A message left on the topic
+        // by an earlier run carries that run's timestamp, so subtracting it measures how long the
+        // message sat on the topic - hours or days - rather than anything about the pipeline. The
+        // reconciliation above already excludes these by run id and counts them as foreign; the
+        // timer used not to, which let one backlog replay poison the latency metrics for the rest
+        // of the process lifetime, because a timer's histogram is cumulative.
+        //
+        // This is also what makes autoOffsetReset=earliest usable: the backlog is still counted
+        // for delivery reconciliation, but no longer drags the latency distribution with it.
+        if (!ledger.getRunId().equals(t.getRun())) {
+            return;
+        }
         try {
             Instant readTime = Instant.parse(envelope.time());
             Instant writeTime = Instant.parse(t.getTime());
@@ -196,11 +208,16 @@ public class ConsumerController {
         String verdict = s.pending() > 0
                 ? "INCONCLUSIVE - " + s.pending() + " sequences still pending; stop the publisher, "
                         + "let it drain, then re-check with ?finalize=true"
-                : (s.missing() == 0 ? "NO LOSS DETECTED" : "LOSS DETECTED: " + s.missing() + " message(s)");
+                : (s.missing() == 0
+                        ? "NO LOSS DETECTED" + (s.unsent() > 0
+                                ? " (" + s.unsent() + " never left the producer)" : "")
+                        : "LOSS DETECTED: " + s.missing() + " message(s)");
 
         return "<html><body><h3>" + verdict + "</h3><table>"
                 + row("run id", s.runId())
-                + row("produced", s.produced())
+                + row("produced (sequences issued)", s.produced())
+                + row("unsent (send failed locally)", s.unsent())
+                + row("offered to the cluster", s.offered())
                 + row("received", s.received())
                 + row("missing (settled, never arrived)", s.missing())
                 + row("pending (in flight, unjudged)", s.pending())
@@ -209,8 +226,10 @@ public class ConsumerController {
                 + row("out of order", s.outOfOrder())
                 + row("foreign (other runs, ignored)", s.foreign())
                 + "</table><p>Duplicates and reordering are expected across partitions; Kafka only "
-                + "orders within one. Compare missing against kproducer_producer_errors_total - a "
-                + "send that failed locally was never the cluster's to lose.</p></body></html>";
+                + "orders within one. A send that failed locally was never the cluster's to lose, "
+                + "so those are retired as <em>unsent</em> rather than counted as missing - "
+                + "<em>offered</em> is what the cluster was actually asked to carry, and it is "
+                + "<em>missing</em> against that figure which indicates real loss.</p></body></html>";
     }
 
     private static String row(String label, Object value) {

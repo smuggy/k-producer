@@ -23,9 +23,9 @@ import java.util.function.ToDoubleFunction;
  * proportional to everything ever sent. Sequences let a fixed-size sliding window do the same job:
  * a {@link BitSet} covering {@value #WINDOW} sequences, about 12KB, regardless of run length.
  *
- * <p><b>Why a window rather than instant judgement.</b> A gap is not loss - the message may still
+ * <p><b>Why a window rather than instant judgment.</b> A gap is not loss - the message may still
  * be in flight. A sequence is only declared missing once the window slides past it, which needs
- * {@value #WINDOW} later sequences to arrive. {@link #finalizeOutstanding()} forces the judgement
+ * {@value #WINDOW} later sequences to arrive. {@link #finalizeOutstanding()} forces the judgment
  * early, for use once the publisher has stopped and the pipeline has drained.
  *
  * <p><b>Run id.</b> Messages from an earlier run are still on the topic and would otherwise read
@@ -56,6 +56,7 @@ public class DeliveryLedger {
     private long missing;
     private long late;
     private long foreign;
+    private long unsent;
 
     public DeliveryLedger(MeterRegistry registry) {
         // These only ever increase, so they are counters rather than gauges - Prometheus needs
@@ -74,6 +75,9 @@ public class DeliveryLedger {
                 "Messages received below the high-water sequence", l -> l.outOfOrder);
         counter(registry, "kproducer.delivery.foreign",
                 "Messages from a different run id, ignored", l -> l.foreign);
+        counter(registry, "kproducer.delivery.unsent",
+                "Sequences whose send failed locally, so the cluster never received them",
+                l -> l.unsent);
         // Can fall as messages arrive, so a gauge.
         Gauge.builder("kproducer.delivery.pending", this, l -> l.readLocked(DeliveryLedger::pending))
                 .description("Issued sequences neither received nor yet settled - still in flight")
@@ -169,6 +173,39 @@ public class DeliveryLedger {
     }
 
     /**
+     * Retires a sequence whose message never reached the cluster.
+     *
+     * <p>The sequence is issued when the message is created, before the send is attempted. If that
+     * send then throws - brokers unreachable, max.block.ms expired - the message never left the
+     * process, so it cannot arrive and must not sit in {@code pending} until the window ages it
+     * into {@code missing}. Reporting it as missing would blame the cluster for losing something
+     * it was never given: observed as 32 phantom pending against Kubernetes and 50 against a
+     * remote cluster, both climbing without bound.
+     *
+     * <p>Counted separately rather than deducted from {@code produced}, because "we tried to send
+     * this and could not" is a real and useful figure - it is the producer-side failure rate, and
+     * it is what makes the difference between a broken client and a lossy cluster legible.
+     */
+    public void sendFailed(long seq) {
+        if (seq < 0) {
+            return; // a generator that does not take part in reconciliation
+        }
+        synchronized (lock) {
+            if (seq < windowStart) {
+                return; // already settled; nothing left to retire
+            }
+            slideTo(seq);
+            int bit = (int) (seq - windowStart);
+            if (!seen.get(bit)) {
+                // Marking it seen settles it: the window will not later judge it missing, and it
+                // drops out of pending immediately.
+                seen.set(bit);
+                unsent++;
+            }
+        }
+    }
+
+    /**
      * Settles every issued sequence still inside the window, turning "pending" into a verdict.
      * Call once the publisher has stopped and the pipeline has had time to drain.
      */
@@ -200,11 +237,17 @@ public class DeliveryLedger {
     public Snapshot snapshot() {
         synchronized (lock) {
             return new Snapshot(runId, produced.get(), received, duplicates, missing, late,
-                    outOfOrder, foreign, (long) pending());
+                    outOfOrder, foreign, unsent, (long) pending());
         }
     }
 
     public record Snapshot(String runId, long produced, long received, long duplicates,
-                           long missing, long late, long outOfOrder, long foreign, long pending) {
+                           long missing, long late, long outOfOrder, long foreign, long unsent,
+                           long pending) {
+
+        /** Messages the cluster was actually given, i.e. everything whose send did not fail. */
+        public long offered() {
+            return produced - unsent;
+        }
     }
 }

@@ -42,11 +42,30 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
      * request thread would throw ConcurrentModificationException.
      */
     private volatile boolean assigned;
+    /**
+     * How long a run of empty polls may pass before the reader actively checks that the brokers
+     * are still reachable, and how long that check may take.
+     */
+    private static final Duration REACHABILITY_CHECK_INTERVAL = Duration.ofSeconds(30);
+    private final Duration reachabilityCheckInterval;
+    private static final Duration REACHABILITY_CHECK_TIMEOUT = Duration.ofSeconds(5);
+    /** Worker-thread only: last time we had positive evidence the cluster was reachable. */
+    private long lastContactNanos = System.nanoTime();
 
     public KafkaReader(ConsumerFactory<String, String> consumer, String topicName, MeterRegistry registry) {
+        this(consumer.createConsumer(), topicName, registry, REACHABILITY_CHECK_INTERVAL);
+    }
+
+    /**
+     * Package-private: takes the consumer directly and allows a shorter reachability interval, so
+     * a test can drive that path without waiting out the production one.
+     */
+    KafkaReader(Consumer<String, String> consumer, String topicName, MeterRegistry registry,
+                Duration reachabilityCheckInterval) {
         this.registry = registry;
         this.topicName = topicName;
-        this.consumer = consumer.createConsumer();
+        this.consumer = consumer;
+        this.reachabilityCheckInterval = reachabilityCheckInterval;
         this.consumer.subscribe(Collections.singletonList(topicName), this);
     }
 
@@ -60,7 +79,45 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
             recordMetadata(r);
         }
         consumer.commitSync(Duration.ofSeconds(1));
+        if (records.isEmpty()) {
+            verifyReachable();
+        } else {
+            lastContactNanos = System.nanoTime();
+        }
         return ret;
+    }
+
+    /**
+     * Confirms the cluster is still there when nothing is arriving.
+     *
+     * <p>An idle topic and an unreachable cluster look identical from poll(): both return an empty
+     * batch and throw nothing. The partition assignment does not separate them either, because
+     * {@link #assigned} is only cleared by a rebalance callback, and a client that has lost every
+     * broker never learns it lost its partitions - so the flag stays stale at true through a total
+     * outage. Without this check a dead cluster reports healthy indefinitely.
+     *
+     * <p>endOffsets is a real round trip to the partition leaders and throws when they cannot be
+     * reached, so the failure reaches {@code WorkerLoop}, which backs off and marks the loop
+     * unhealthy - which is what the readiness probes read. Bounded and single-attempt, leaving the
+     * retry to the loop, per the blocking-call rule in CLAUDE.md.
+     *
+     * <p>Runs on the polling thread, inside readMessage, because KafkaConsumer permits only
+     * single-threaded access. It fires at most once per interval, and only while idle, so a busy
+     * reader never pays for it.
+     */
+    private void verifyReachable() {
+        if (System.nanoTime() - lastContactNanos < reachabilityCheckInterval.toNanos()) {
+            return;
+        }
+        Collection<TopicPartition> assignment = consumer.assignment();
+        if (assignment.isEmpty()) {
+            // Nothing to ask about, and isReady() already reports this as not attached.
+            return;
+        }
+        logger.debug("No records for {}s; verifying the cluster is reachable.",
+                reachabilityCheckInterval.toSeconds());
+        consumer.endOffsets(assignment, REACHABILITY_CHECK_TIMEOUT);
+        lastContactNanos = System.nanoTime();
     }
 
     /**

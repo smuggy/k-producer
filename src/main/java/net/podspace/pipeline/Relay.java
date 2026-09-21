@@ -21,7 +21,7 @@ import java.util.List;
  * timestamp exactly - re-serializing would rewrite it and destroy the measurement - and means the
  * relay works for any payload, not just the temperature messages this app happens to generate.
  */
-public class Relay {
+public class Relay implements EngineStatus {
     private static final Logger logger = LoggerFactory.getLogger(Relay.class);
     private static final long PAUSE_MILLIS = 5_000;
     private final MessageReader reader;
@@ -58,8 +58,19 @@ public class Relay {
         loop.resume();
     }
 
+    @Override
     public boolean isHealthy() {
         return loop.isHealthy();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return loop.isRunning();
+    }
+
+    @Override
+    public boolean isAttached() {
+        return reader.isReady();
     }
 
     /** Whether the inbound side is actually attached; see MessageReader.isReady(). */
@@ -67,10 +78,12 @@ public class Relay {
         return reader.isReady();
     }
 
+    @Override
     public long getTotalFailures() {
         return loop.getTotalFailures();
     }
 
+    @Override
     public String getLastFailure() {
         return loop.getLastFailure();
     }
