@@ -35,12 +35,30 @@ service).
 
 | Row | Answers |
 |-----|---------|
-| Delivery integrity | Did anything get lost, duplicated or reordered? |
+| Delivery integrity | Did anything get lost, duplicated or reordered — and was it the cluster's fault? |
 | End-to-end latency | How long from publish to consume, and how much is within SLO? |
 | Producer | Is the send path healthy — acks, retries, buffer pressure, batching? |
 | Consumer | Is the read path keeping up — lag, fetch latency, offset progress? |
 | Failure and recovery | What happened during a broker outage, and how long until baseline? |
 | Echo relay | Is the return leg forwarding (echo role), and is the probe itself stable? |
+
+## Reading the delivery row
+
+**Compare received against *offered*, not *produced*.** A sequence is issued when a message is
+created, before the send is attempted, so a send that fails locally would otherwise look like a
+message the cluster lost. Those are retired as **Never sent** instead, and `offered` = produced −
+unsent is what the cluster was actually asked to carry.
+
+That makes two failures distinguishable at a glance:
+
+* **Messages lost** above zero with **Never sent** at zero — the cluster was given the messages and
+  did not deliver them. A cluster problem.
+* **Never sent** above zero — the producer could not hand them over at all. A connectivity or
+  configuration problem, and the run proved nothing about the cluster either way.
+
+**Out of order** is expected whenever traffic spans partitions, because Kafka orders only within
+one. It becomes a real signal when the publisher runs with `myapp.publisher.keyCount=1`, which
+pins every message to a single partition.
 
 ## Two things to know before trusting a panel
 

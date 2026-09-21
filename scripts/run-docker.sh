@@ -6,6 +6,7 @@
 #   ./scripts/run-docker.sh --broker 192.168.0.60:9092        # against real Kafka
 #   ./scripts/run-docker.sh --profile test --ca ../vpcs/secrets/internal_ca_cert.pem
 #   ./scripts/run-docker.sh --role echo --broker host:9092 --echo-topic t-echo
+#   ./scripts/run-docker.sh --broker host:9092 --verify 5000      # pass/fail, exits 0|1|2
 #   ./scripts/run-docker.sh stop|logs|status
 #
 set -euo pipefail
@@ -27,6 +28,10 @@ INSTANCE=""
 SLEEP=""
 COUNT=""
 FILLER=""
+KEYS=""
+GROUP=""
+OFFSET=""
+VERIFY=""
 DETACH=1
 AUTOSTART=0
 
@@ -54,6 +59,12 @@ Options:
   --sleep N             half-seconds between publishes
   --count N             messages per publish
   --filler N            filler bytes per message
+  --keys N              distinct partition keys to cycle over (0 = send unkeyed)
+  --group NAME          consumer group id
+  --offset WHERE        latest (measure from now) | earliest (read the backlog first)
+  --verify N            publish N messages, reconcile, then exit 0 (no loss), 1 (loss)
+                        or 2 (inconclusive). Runs in the foreground and returns that code,
+                        so it can be used directly as a build step.
   --port N              host port to expose (default 8080)
   --name NAME           container name (default k-producer)
   --tag VERSION         image tag (default: version from build.gradle)
@@ -80,6 +91,10 @@ while [ $# -gt 0 ]; do
         --sleep)     SLEEP=$2; shift 2 ;;
         --count)     COUNT=$2; shift 2 ;;
         --filler)    FILLER=$2; shift 2 ;;
+        --keys)      KEYS=$2; shift 2 ;;
+        --group)     GROUP=$2; shift 2 ;;
+        --offset)    OFFSET=$2; shift 2 ;;
+        --verify)    VERIFY=$2; shift 2 ;;
         --port)      PORT=$2; shift 2 ;;
         --name)      NAME=$2; shift 2 ;;
         --tag)       TAG=$2; shift 2 ;;
@@ -115,6 +130,16 @@ if [ "$ROLE" = "origin" ] || [ "$ROLE" = "echo" ]; then
     [ "$MESSENGER" = "kafka" ] || die "--role $ROLE needs --broker (the queue transport shares one channel)"
 fi
 
+if [ -n "$OFFSET" ] && [ "$OFFSET" != "latest" ] && [ "$OFFSET" != "earliest" ]; then
+    die "--offset must be latest or earliest (got '$OFFSET')"
+fi
+if [ -n "$VERIFY" ]; then
+    case "$VERIFY" in ''|*[!0-9]*) die "--verify needs a message count (got '$VERIFY')" ;; esac
+    # An echo instance only relays; it has no publisher to drive, so there is nothing to verify.
+    [ "$ROLE" != "echo" ] || die "--verify needs a role that publishes and consumes, not echo"
+    [ "$MESSENGER" = "kafka" ] || die "--verify needs --broker; verifying the in-memory queue proves nothing"
+fi
+
 [ -z "$CA_FILE" ] || [ -f "$CA_FILE" ] || die "CA file not found: $CA_FILE"
 [ -z "$CONFIG_FILE" ] || [ -f "$CONFIG_FILE" ] || die "config file not found: $CONFIG_FILE"
 
@@ -125,8 +150,17 @@ docker image inspect "${IMAGE}:${TAG}" >/dev/null 2>&1 || {
     (cd "$(dirname "$0")/.." && ./gradlew buildDockerImage)
 }
 
+# Verification exits on its own with a meaningful status, so it must run in the foreground and
+# without a TTY - the exit code is the entire output anyone cares about.
+[ -z "$VERIFY" ] || DETACH=0
 args=(--name "$NAME" -p "${PORT}:8080")
-[ "$DETACH" = "1" ] && args+=(-d) || args+=(--rm -it)
+if [ "$DETACH" = "1" ]; then
+    args+=(-d)
+elif [ -n "$VERIFY" ]; then
+    args+=(--rm)
+else
+    args+=(--rm -it)
+fi
 
 env_add() { [ -n "$2" ] && args+=(-e "$1=$2") || true; }
 env_add MYAPP_MESSENGER               "$MESSENGER"
@@ -139,6 +173,10 @@ env_add MYAPP_INSTANCE                "$INSTANCE"
 env_add MYAPP_PUBLISHER_SLEEP         "$SLEEP"
 env_add MYAPP_PUBLISHER_MESSAGECOUNT  "$COUNT"
 env_add MYAPP_PUBLISHER_FILLERSIZE    "$FILLER"
+env_add MYAPP_PUBLISHER_KEYCOUNT      "$KEYS"
+env_add MYAPP_KAFKA_GROUPID           "$GROUP"
+env_add MYAPP_KAFKA_AUTOOFFSETRESET   "$OFFSET"
+env_add MYAPP_VERIFY_MESSAGES         "$VERIFY"
 env_add SPRING_PROFILES_ACTIVE        "$PROFILE"
 
 if [ -n "$CA_FILE" ]; then
@@ -156,6 +194,10 @@ if [ -n "$PROFILE" ] && [ -z "$CA_FILE" ]; then
 fi
 
 docker rm -f "$NAME" >/dev/null 2>&1 || true
+if [ -n "$VERIFY" ]; then
+    # exec so the container's exit status becomes this script's, unmodified.
+    exec docker run "${args[@]}" "${IMAGE}:${TAG}"
+fi
 docker run "${args[@]}" "${IMAGE}:${TAG}"
 
 [ "$DETACH" = "1" ] || exit 0
@@ -182,6 +224,7 @@ cat <<EOF
   http://localhost:${PORT}/actuator/prometheus       metrics
   http://localhost:${PORT}/publisher/settings        current publish rate/size
   http://localhost:${PORT}/consumer/histogram        latency distribution
+  http://localhost:${PORT}/publisher/settings        current rate, batch and filler size
   http://localhost:${PORT}/consumer/reconciliation   delivery reconciliation
 
   $0 logs      follow the log

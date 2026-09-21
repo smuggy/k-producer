@@ -148,7 +148,7 @@ public class Publisher implements PublisherManager, EngineStatus {
         for (long i = 0; i < batch; i++) {
             MessageGenerator.Generated message = generator.createMessage();
             try {
-                writer.writeMessage(message.payload());
+                writer.writeMessage(message.key(), message.payload());
             } catch (RuntimeException e) {
                 // The sequence was issued when the message was created. A send that never left
                 // this process cannot arrive, so it has to be retired rather than left to age out

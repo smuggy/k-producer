@@ -17,9 +17,23 @@ public class TemperatureGenerator implements MessageGenerator {
     // not the read-modify-write that a relative adjustment needs.
     private final AtomicInteger fillerSize = new AtomicInteger();
     private final DeliveryLedger ledger;
+    /**
+     * How many distinct partition keys to cycle through. Zero means send without a key, leaving
+     * placement to Kafka's sticky partitioner - the right default for raw throughput. A positive
+     * value spreads messages deterministically over that many keys, which is what makes
+     * per-partition behaviour reproducible: the same key always hashes to the same partition, and
+     * Kafka orders within a partition, so out-of-order arrivals become meaningful rather than
+     * expected noise.
+     */
+    private final int keyCount;
 
     public TemperatureGenerator(DeliveryLedger ledger) {
+        this(ledger, 0);
+    }
+
+    public TemperatureGenerator(DeliveryLedger ledger, int keyCount) {
         this.ledger = ledger;
+        this.keyCount = Math.max(0, keyCount);
     }
 
     public Generated createMessage() {
@@ -29,7 +43,7 @@ public class TemperatureGenerator implements MessageGenerator {
         long sequence = ledger.nextSequence();
         Temperature t = Temperature.createCelsiusTemp(
                 RANDOM.nextDouble(100), generateFiller(), ledger.getRunId(), sequence);
-        return new Generated(t.toJsonString(), sequence);
+        return new Generated(keyFor(sequence), t.toJsonString(), sequence);
     }
 
     public int getFillerSize() {
@@ -54,6 +68,11 @@ public class TemperatureGenerator implements MessageGenerator {
             return 0;
         }
         return (int) Math.min(size, MAX_FILLER_SIZE);
+    }
+
+    /** Null when unkeyed; otherwise cycles deterministically over keyCount distinct keys. */
+    private String keyFor(long sequence) {
+        return keyCount == 0 ? null : "k" + Math.floorMod(sequence, keyCount);
     }
 
     private String generateFiller() {

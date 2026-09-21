@@ -18,6 +18,7 @@ import net.podspace.messaging.noop.EmptyWriter;
 import net.podspace.messaging.queue.QueueManager;
 import net.podspace.pipeline.DeliveryLedger;
 import net.podspace.pipeline.Publisher;
+import net.podspace.pipeline.EngineStatus;
 import net.podspace.pipeline.Relay;
 import net.podspace.pipeline.PublisherManager;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -27,14 +28,17 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.*;
 
 import jakarta.annotation.PostConstruct;
 import javax.management.NotCompliantMBeanException;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -103,6 +107,9 @@ public class AppConfig {
     private int sleepConfig;
     @Value("${myapp.publisher.fillerSize:0}")
     private int fillerSize;
+    @Value("${myapp.publisher.keyCount:0}")
+    private int keyCount;
+
     @Value("${myapp.publisher.messageCount:1}")
     private int messageCount;
     @Autowired
@@ -262,7 +269,7 @@ public class AppConfig {
 
     @Bean
     public Publisher publisher() {
-        var producer = new TemperatureGenerator(deliveryLedger());
+        var producer = new TemperatureGenerator(deliveryLedger(), keyCount);
         var publisher = new Publisher(producer, messageWriter(), deliveryLedger());
         publisher.setSleep(sleepConfig);
         publisher.setFillerSize(fillerSize);
@@ -319,10 +326,35 @@ public class AppConfig {
         return new PipelineHealthIndicator(watcher);
     }
 
+    /*
+     * Registered in every role, not just echo. A conditional contributor would force
+     * validate-group-membership off, because the readiness group naming it would fail startup in
+     * every role that lacks it - and that switch being off is what lets a renamed contributor drop
+     * out of the group silently.
+     */
     @Bean
-    @ConditionalOnProperty(name = "myapp.role", havingValue = ECHO)
-    public PipelineHealthIndicator relayHealthIndicator(Relay relay) {
-        return new PipelineHealthIndicator(relay);
+    public PipelineHealthIndicator relayHealthIndicator(ObjectProvider<Relay> relay) {
+        Relay actual = relay.getIfAvailable();
+        return new PipelineHealthIndicator(actual != null ? actual : EngineStatus.idle());
+    }
+
+    /**
+     * Only present when myapp.verify.messages is set, which is what turns an interactive probe
+     * into a build step. Absent that property the application behaves exactly as before, so this
+     * cannot surprise a long-running deployment by exiting under it.
+     */
+    @Bean
+    @ConditionalOnProperty(name = "myapp.verify.messages")
+    public VerificationRunner verificationRunner(
+            Publisher publisher, Watcher<Temperature> watcher, DeliveryLedger ledger,
+            ConfigurableApplicationContext context,
+            @Value("${myapp.verify.messages}") long targetMessages,
+            @Value("${myapp.verify.timeoutSeconds:120}") long timeoutSeconds,
+            @Value("${myapp.verify.drainSeconds:30}") long drainSeconds,
+            @Value("${myapp.verify.attachSeconds:30}") long attachSeconds) {
+        return new VerificationRunner(publisher, watcher, ledger, context, targetMessages,
+                Duration.ofSeconds(timeoutSeconds), Duration.ofSeconds(drainSeconds),
+                Duration.ofSeconds(attachSeconds));
     }
 
     @Bean

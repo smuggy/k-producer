@@ -43,10 +43,17 @@ public class KafkaWriter implements MessageWriter {
 
     @Override
     public void writeMessage(String message) {
+        writeMessage(null, message);
+    }
+
+    @Override
+    public void writeMessage(String key, String message) {
         long startNanos = System.nanoTime();
         CompletableFuture<SendResult<String, String>> future;
         try {
-            future = kafkaTemplate.send(topicName, message);
+            // A null key leaves partition choice to the sticky partitioner, which is the right
+            // default for pure throughput; a key pins the message to a partition by hash.
+            future = kafkaTemplate.send(topicName, key, message);
         } catch (RuntimeException e) {
             // Sends fail on two different paths and both must be counted. When the brokers are
             // entirely unreachable the client cannot even fetch metadata, so send() blocks for

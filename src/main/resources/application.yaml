@@ -12,11 +12,10 @@ management:
       show-details: always
       probes:
         enabled: true
-      # The relay contributor only exists in the echo role, so the readiness group would fail
-      # validation in every other role. The cost is that a renamed or missing contributor is
-      # tolerated silently rather than failing startup - check /actuator/health/readiness lists
-      # what you expect after renaming any of them.
-      validate-group-membership: false
+      # On, so a typo or a renamed contributor fails startup instead of silently dropping out of
+      # the readiness group and leaving it permanently UP. This is only possible because all three
+      # engine contributors are registered in every role - see relayHealthIndicator in AppConfig.
+      validate-group-membership: true
       group:
         # Liveness deliberately excludes the relay: a relay in backoff means the brokers are
         # unreachable, not that this process is broken. Restarting on that would produce restart
@@ -64,7 +63,25 @@ myapp:
   # `instance` label for the scrape target, and a collision gets ours silently renamed to
   # `exported_instance`. See MetricsConfig.
   instance: ${HOSTNAME:unknown}
+  # Headless verification mode, off unless myapp.verify.messages is set. Publishes that many
+  # messages, waits for the pipeline to drain, reconciles, prints a summary and exits:
+  #   0 = every published message was delivered
+  #   1 = messages were lost
+  #   2 = inconclusive - the run could not be completed, so no verdict is claimed
+  # Keeping "lost messages" and "could not reach the brokers" as different codes matters: they
+  # call for different responses from whatever is reading the exit status.
+  #   java -jar k-producer.jar --myapp.verify.messages=5000
+  # verify:
+  #   messages: 5000
+  #   timeoutSeconds: 120
+  #   drainSeconds: 30
   publisher:
+    # Distinct partition keys to cycle through. 0 sends unkeyed, letting Kafka's sticky
+    # partitioner place messages - correct for raw throughput. A positive value pins each message
+    # to a partition by key hash, which is how to exercise a multi-partition topic deliberately:
+    # Kafka orders only within a partition, so with keys an out-of-order arrival is a real finding
+    # rather than the expected consequence of spreading traffic.
+    keyCount: 0
     messageCount: 5
     sleep: 10
     fillerSize: 512
