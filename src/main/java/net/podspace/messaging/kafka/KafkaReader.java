@@ -47,19 +47,22 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
      * are still reachable, and how long that check may take.
      */
     private static final Duration REACHABILITY_CHECK_INTERVAL = Duration.ofSeconds(30);
+    /** Zero or negative disables the check entirely - see myapp.kafka.reachabilityCheckSeconds. */
     private final Duration reachabilityCheckInterval;
     private static final Duration REACHABILITY_CHECK_TIMEOUT = Duration.ofSeconds(5);
     /** Worker-thread only: last time we had positive evidence the cluster was reachable. */
     private long lastContactNanos = System.nanoTime();
 
     public KafkaReader(ConsumerFactory<String, String> consumer, String topicName, MeterRegistry registry) {
-        this(consumer.createConsumer(), topicName, registry, REACHABILITY_CHECK_INTERVAL);
+        this(consumer, topicName, registry, REACHABILITY_CHECK_INTERVAL);
     }
 
-    /**
-     * Package-private: takes the consumer directly and allows a shorter reachability interval, so
-     * a test can drive that path without waiting out the production one.
-     */
+    public KafkaReader(ConsumerFactory<String, String> consumer, String topicName,
+                       MeterRegistry registry, Duration reachabilityCheckInterval) {
+        this(consumer.createConsumer(), topicName, registry, reachabilityCheckInterval);
+    }
+
+    /** Package-private: takes the consumer directly, so a test can supply a stub. */
     KafkaReader(Consumer<String, String> consumer, String topicName, MeterRegistry registry,
                 Duration reachabilityCheckInterval) {
         this.registry = registry;
@@ -104,8 +107,19 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
      * <p>Runs on the polling thread, inside readMessage, because KafkaConsumer permits only
      * single-threaded access. It fires at most once per interval, and only while idle, so a busy
      * reader never pays for it.
+     *
+     * <p><b>Overlap with commitSync.</b> In practice the commitSync a few lines above usually
+     * detects an outage first - measured at about 15s against a killed broker, versus 30s for this
+     * check - because it makes a coordinator round trip of its own. That cover is not guaranteed
+     * though: it depends on there being an offset to commit, which stops being true with
+     * enable.auto.commit or a reader that does not commit. This stays as the explicit guarantee,
+     * and myapp.kafka.reachabilityCheckSeconds turns it off for anyone who would rather rely on
+     * the commit path alone.
      */
     private void verifyReachable() {
+        if (reachabilityCheckInterval.isZero() || reachabilityCheckInterval.isNegative()) {
+            return; // disabled by configuration
+        }
         if (System.nanoTime() - lastContactNanos < reachabilityCheckInterval.toNanos()) {
             return;
         }

@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Echoes messages from one topic to another, verbatim.
@@ -86,6 +87,12 @@ public class Relay implements EngineStatus {
     @Override
     public String getLastFailure() {
         return loop.getLastFailure();
+    }
+
+    /** Surfaces the forwarded count on /actuator/health, alongside the metric. */
+    @Override
+    public Map<String, Object> details() {
+        return Map.of("relayed", getRelayedCount());
     }
 
     public long getRelayedCount() {

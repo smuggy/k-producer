@@ -25,6 +25,8 @@ class KafkaReaderReachabilityTest {
 
     private static final String TOPIC = "t";
     private static final TopicPartition PARTITION = new TopicPartition(TOPIC, 0);
+    /** Short enough that the check fires on every poll, without meaning "disabled". */
+    private static final Duration TINY = Duration.ofNanos(1);
 
     /** A consumer whose endOffsets fails the way an unreachable cluster does. */
     private static class UnreachableAfterAssignment extends MockConsumer<String, String> {
@@ -57,8 +59,9 @@ class KafkaReaderReachabilityTest {
     @Test
     void anIdleButReachableClusterIsNotReportedAsAFailure() {
         UnreachableAfterAssignment consumer = assignedConsumer();
-        // Zero interval, so the check runs on every empty poll rather than after thirty seconds.
-        KafkaReader reader = new KafkaReader(consumer, TOPIC, new SimpleMeterRegistry(), Duration.ZERO);
+        // One nanosecond, so the check runs on every empty poll rather than after thirty seconds.
+        // Not zero: zero means disabled, which is what the configuration property exposes.
+        KafkaReader reader = new KafkaReader(consumer, TOPIC, new SimpleMeterRegistry(), TINY);
         consumer.rebalance(List.of(PARTITION));
 
         for (int i = 0; i < 3; i++) {
@@ -71,7 +74,7 @@ class KafkaReaderReachabilityTest {
     @Test
     void anUnreachableClusterSurfacesAsAFailureRatherThanSilence() {
         UnreachableAfterAssignment consumer = assignedConsumer();
-        KafkaReader reader = new KafkaReader(consumer, TOPIC, new SimpleMeterRegistry(), Duration.ZERO);
+        KafkaReader reader = new KafkaReader(consumer, TOPIC, new SimpleMeterRegistry(), TINY);
         consumer.rebalance(List.of(PARTITION));
 
         Assertions.assertTrue(reader.readMessage().isEmpty(), "reachable: quiet, no error");
@@ -90,12 +93,28 @@ class KafkaReaderReachabilityTest {
     void theCheckIsSkippedWhileNoPartitionsAreAssigned() {
         UnreachableAfterAssignment consumer = assignedConsumer();
         consumer.reachable = false;
-        KafkaReader reader = new KafkaReader(consumer, TOPIC, new SimpleMeterRegistry(), Duration.ZERO);
+        KafkaReader reader = new KafkaReader(consumer, TOPIC, new SimpleMeterRegistry(), TINY);
         // No rebalance, so nothing is assigned.
 
         Assertions.assertFalse(reader.isReady());
         Assertions.assertDoesNotThrow(reader::readMessage,
                 "with no assignment there is nothing to ask about, and isReady already reports it");
+        Assertions.assertEquals(0, consumer.endOffsetCalls);
+    }
+
+    @Test
+    void zeroDisablesTheCheckEntirely() {
+        // myapp.kafka.reachabilityCheckSeconds=0 for anyone who would rather rely on commitSync,
+        // which usually detects an outage first. Disabled must mean silent, not "check always".
+        UnreachableAfterAssignment consumer = assignedConsumer();
+        consumer.reachable = false;
+        KafkaReader reader = new KafkaReader(consumer, TOPIC, new SimpleMeterRegistry(), Duration.ZERO);
+        consumer.rebalance(List.of(PARTITION));
+
+        for (int i = 0; i < 3; i++) {
+            Assertions.assertDoesNotThrow(reader::readMessage,
+                    "a disabled check must not reach the broker at all");
+        }
         Assertions.assertEquals(0, consumer.endOffsetCalls);
     }
 

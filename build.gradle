@@ -42,7 +42,12 @@ tasks.register("cleanDockerDirTars", Delete) {
 
 tasks.register("copyTarToDockerDir", Copy) {
     from layout.buildDirectory.dir("distributions")
-    include "**/k-producer-boot-*.tar"
+    // The exact artifact, not a glob. distributions/ accumulates every version built since the
+    // last clean, and a glob copied all of them into the build context - which is how a stale
+    // 0.5.1 tar ended up being shipped to the daemon during a 0.5.2 build. The image was never
+    // wrong, because the Dockerfile COPYs one pinned filename, but tens of megabytes of dead
+    // weight went across for nothing and it reads alarmingly in the build output.
+    include "${project.name}-boot-${project.version}.tar"
     into layout.buildDirectory.dir("docker")
 }
 copyTarToDockerDir.dependsOn cleanDockerDirTars

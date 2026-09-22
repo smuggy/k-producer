@@ -1,7 +1,20 @@
+# The availability zone every instance configured from these prefixes reports. It is tagged onto
+# every metric, and it is the dimension that makes an origin in one zone comparable against an echo
+# in another - which is the whole point of those two roles. Left unset, instances report
+# az="unknown" and become indistinguishable on a dashboard.
+#
+# One value because all three prefixes below point at the same brokers in the same datacenter;
+# they differ by topic and consumer group, not by location. Split this per prefix the moment
+# instances actually run somewhere different, or the cross-zone measurement means nothing.
+locals {
+  availability_zone = "local-net-1"
+}
+
 # Need to specify export SPRING_PROFILES_ACTIVE="consul,ext"
 resource consul_key_prefix app_configuration_ext {
   path_prefix = "config/k-producer,ext/"
   subkeys = {
+    "myapp/az"                     = local.availability_zone
     "server/port"                  = "8090"
     "myapp/messenger"              = "kafka"
     "myapp/role"                   = "loopback"
@@ -17,6 +30,7 @@ resource consul_key_prefix app_configuration_ext {
 resource consul_key_prefix app_configuration_consul {
   path_prefix = "config/k-producer,consul/"
   subkeys = {
+    "myapp/az"                     = local.availability_zone
     "server/port"                  = "8090"
     "myapp/messenger"              = "kafka"
     "myapp/publisher/sleep"        = 2
@@ -34,6 +48,7 @@ resource consul_key_prefix app_configuration_consul {
 resource consul_key_prefix app_configuration_other {
   path_prefix = "config/k-producer,other/"
   subkeys = {
+    "myapp/az"                     = local.availability_zone
     "server/port"                  = "8080"
     "myapp/messenger"              = "kafka"
     "myapp/role"                   = "loopback"

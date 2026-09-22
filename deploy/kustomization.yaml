@@ -20,3 +20,6 @@ configMapGenerator:
   - name: k-producer-config
     files:
       - application.yaml=config/application.yaml
+  - name: consul-ca
+    files:
+      - internal-ca.pem=../../vpcs/secrets/internal_ca_cert.pem

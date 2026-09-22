@@ -1,5 +1,7 @@
 package net.podspace.pipeline;
 
+import java.util.Map;
+
 /**
  * The health surface every pipeline engine exposes, so one indicator can report on any of them.
  *
@@ -26,6 +28,21 @@ public interface EngineStatus {
 
     /** Description of the most recent failure, or null while healthy. */
     String getLastFailure();
+
+    /**
+     * Extra, engine-specific values to include in the health report.
+     *
+     * <p>Empty by default, because the fields above are what every engine has in common and what
+     * readiness is actually decided on. This exists so an engine can add the one number that makes
+     * its own report diagnosable - the relay's forwarded count being the case in point - without
+     * pushing a concept onto the other two that they have no meaning for.
+     *
+     * <p>These are reported, never used to decide up or down. A contributor that changed the
+     * verdict from here would put the decision in two places.
+     */
+    default Map<String, Object> details() {
+        return Map.of();
+    }
 
     /**
      * A status for an engine this role does not run at all.

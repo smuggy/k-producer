@@ -41,6 +41,8 @@ public class PipelineHealthIndicator implements HealthIndicator {
         builder.withDetail("running", running)
                 .withDetail("attached", engine.isAttached())
                 .withDetail("totalFailures", engine.getTotalFailures());
+        // Engine-specific extras, reported but never part of the verdict above.
+        engine.details().forEach(builder::withDetail);
         String lastFailure = engine.getLastFailure();
         if (lastFailure != null) {
             builder.withDetail("lastFailure", lastFailure);

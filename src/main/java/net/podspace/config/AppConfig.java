@@ -63,7 +63,7 @@ public class AppConfig {
     @Value("${myapp.role:loopback}")
     private String role;
     @Value("${myapp.kafka.bootstrapAddress}")
-    private String bootstrapAddress;//="192.168.1.60:9092";
+    private String bootstrapAddress;//="192.168.0.60:9092";
     @Value("${myapp.messenger}")
     private String messenger;
     @Value("${myapp.kafka.groupId:default-consumer}")
@@ -98,6 +98,12 @@ public class AppConfig {
     // factory builds the producer lazily, so that surfaces as every send failing at runtime rather
     // than as a startup error - it cost a full test run to find. 40s leaves headroom for a
     // moderate linger or request timeout without needing this recalculated.
+    // How long a run of empty polls may pass before the reader actively proves the cluster is
+    // still reachable. 0 disables it. See the note in KafkaReader.verifyReachable on the overlap
+    // with commitSync, which usually - but not always - detects an outage first.
+    @Value("${myapp.kafka.reachabilityCheckSeconds:30}")
+    private long reachabilityCheckSeconds;
+
     @Value("${myapp.kafka.deliveryTimeoutMs:40000}")
     private int deliveryTimeoutMs;
 
@@ -197,7 +203,8 @@ public class AppConfig {
         }
         if (messenger.equalsIgnoreCase("kafka")) {
             logger.info("Creating kafka message reader.");
-            return new KafkaReader(consumerFactory(), readerTopic(), meterRegistry);
+            return new KafkaReader(consumerFactory(), readerTopic(), meterRegistry,
+                    Duration.ofSeconds(reachabilityCheckSeconds));
         }
         logger.info("Creating empty message reader.");
         return new EmptyReader();

@@ -104,6 +104,13 @@ myapp:
     # report. Must be at least linger.ms + request.timeout.ms; with Kafka 4 defaults that is
     # 5 + 30000 = 30005, not 30000 - setting it too low makes every send throw ConfigException.
     deliveryTimeoutMs: 40000
+    # Seconds of empty polls before the reader actively checks the cluster is still reachable, by
+    # asking the brokers for end offsets. An idle topic and a dead cluster look identical from
+    # poll() - both return nothing and throw nothing - and the cached partition assignment does not
+    # separate them either, because a client that has lost every broker never learns it lost its
+    # partitions. 0 disables the check: commitSync usually detects an outage first, about 15s
+    # against a killed broker, but only while there is an offset to commit.
+    reachabilityCheckSeconds: 30
     # Deliberately a local default so a fresh checkout runs anywhere. Override per environment
     # via an external config file, Consul, or MYAPP_KAFKA_BOOTSTRAPADDRESS - never by editing
     # this file, which is baked into the jar.

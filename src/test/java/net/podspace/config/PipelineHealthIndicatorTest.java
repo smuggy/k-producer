@@ -13,6 +13,8 @@ import org.springframework.boot.health.contributor.Status;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -126,6 +128,58 @@ class PipelineHealthIndicatorTest {
         }
         // Once stopped it is idle again, so readiness recovers rather than latching DOWN.
         Assertions.assertEquals(Status.UP, statusOf(relay), "a torn-down engine is idle, not broken");
+    }
+
+    @Test
+    void aRelayReportsWhatItHasForwarded() throws Exception {
+        CountDownLatch relayed = new CountDownLatch(1);
+        Relay relay = new Relay(new MessageReader() {
+            @Override public List<String> readMessage() {
+                if (relayed.getCount() == 0) {
+                    return Collections.emptyList();
+                }
+                relayed.countDown();
+                return List.of("a", "b", "c");
+            }
+            @Override public boolean isReady() { return true; }
+        }, m -> { }, new SimpleMeterRegistry());
+
+        relay.initiate();
+        try {
+            Assertions.assertTrue(relayed.await(5, TimeUnit.SECONDS));
+            Thread.sleep(300);
+            Health h = new PipelineHealthIndicator(relay).health();
+            Assertions.assertEquals(3L, ((Number) h.getDetails().get("relayed")).longValue(),
+                    "the forwarded count belongs on the health report, not only in the metric");
+        } finally {
+            relay.teardown();
+        }
+    }
+
+    @Test
+    void enginesWithNothingExtraToSayAddNoDetails() {
+        // Publisher and watcher have no equivalent of a forwarded count; the default is empty
+        // rather than a placeholder that would have to mean something.
+        Health h = new PipelineHealthIndicator(new FakeEngine(true, true, true, 0, null)).health();
+        Assertions.assertEquals(Set.of("running", "attached", "totalFailures"),
+                h.getDetails().keySet());
+    }
+
+    @Test
+    void engineDetailsAreReportedButCannotChangeTheVerdict() {
+        // A contributor able to flip up/down from its details would put the decision in two places.
+        EngineStatus noisy = new EngineStatus() {
+            @Override public boolean isRunning() { return true; }
+            @Override public boolean isHealthy() { return false; }
+            @Override public boolean isAttached() { return true; }
+            @Override public long getTotalFailures() { return 4; }
+            @Override public String getLastFailure() { return "boom"; }
+            @Override public Map<String, Object> details() { return Map.of("status", "UP", "fine", true); }
+        };
+        Health h = new PipelineHealthIndicator(noisy).health();
+        Assertions.assertEquals(Status.DOWN, h.getStatus(),
+                "an unhealthy engine stays DOWN whatever its details claim");
+        Assertions.assertEquals("UP", h.getDetails().get("status"));
     }
 
     @Test
