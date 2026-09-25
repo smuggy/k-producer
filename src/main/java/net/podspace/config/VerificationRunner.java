@@ -102,7 +102,7 @@ public class VerificationRunner implements ApplicationRunner {
         watcher.teardown();
         if (drained) {
             // Settles anything the sliding window has not yet judged. Only safe once drained:
-            // finalising while messages are still in flight would report them as lost.
+            // finalizing while messages are still in flight would report them as lost.
             ledger.finalizeOutstanding();
         }
 

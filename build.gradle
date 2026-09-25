@@ -7,7 +7,7 @@ plugins {
 }
 
 group = 'net.podspace'
-version = '0.5.3'
+version = '0.5.4'
 
 // Pin the bytecode/API level to the JRE in the Docker image, whatever JDK runs Gradle. Without
 // this the class file version silently tracks the local JDK - a JDK 26 build produced major

@@ -22,20 +22,37 @@ Done:
 
 Not done:
 
-* avro schema for the message payload
+* **Avro payloads via a schema registry.** Today messages are hand-built JSON: `Temperature`
+  writes its own `toJsonString()` and `TemperatureConsumer` parses it with Jackson, over
+  `StringSerializer`/`StringDeserializer`. That is deliberate in one respect - it keeps the tool
+  dependency-free and readable on the wire with `kafka-console-consumer` - but it means the probe
+  exercises none of the schema machinery a real deployment relies on, and a registry that is slow,
+  unreachable or rejecting an incompatible schema is a genuine production failure mode this tool
+  cannot currently reproduce.
+
+  Worth doing because it widens what the tool measures: serialization cost as a share of end-to-end
+  latency, the registry as an availability dependency alongside the brokers, and schema-evolution
+  behaviour on a live topic. It would also make the probe representative of clusters where Avro is
+  the norm rather than the exception.
+
+  Three constraints any implementation has to respect, all of them load-bearing:
+  * **The `run` and `seq` fields must survive.** Delivery reconciliation is built on them, so they
+    belong in the schema, not alongside it.
+  * **The embedded timestamp must not be rewritten.** `Relay` forwards messages verbatim as strings
+    precisely so the origin's timestamp reaches the origin unchanged; re-serializing through an
+    Avro record in the relay would destroy the round-trip measurement. Either the relay keeps
+    handling opaque bytes, or echo mode breaks.
+  * **It must stay optional.** `myapp.messenger` already selects the transport; payload format wants
+    the same treatment, so the queue and no-op transports and a registry-less cluster keep working.
+    The `MessageReader`/`MessageWriter` SPI is `String`-based, so byte-oriented payloads mean either
+    widening that SPI or Base64-ing through it - the former is cleaner and the change is contained,
+    since only Kafka and the in-memory queue implement it.
 * JSON output from the interactive endpoints (verification mode covers the scripted case)
 * topic administration — both topics must already exist, or the brokers must allow auto-creation.
   Two routes, and they are not alternatives so much as different scopes:
-  * **Terraform** (`terraform/`) already declares the topic names, as Consul config values across
-    the `ext`, `consul` and `other` profiles — six of them counting the echo topics — but creates
-    none of them. The `Mongey/kafka` provider and a `kafka_topic` resource are sketched out and
-    commented in `providers.tf` and `main.tf`; finishing them would mean the topic and the
-    configuration that names it are provisioned from one place, in step, with partition count and
-    replication factor declared rather than whatever a hand-typed `--create` happened to use. That
-    matters here: the topics this tool has been run against were RF=1, which makes a broker-failure
-    test a data-loss event rather than a failover test.
   * **`KafkaAdmin` in the application**, for creating a topic on demand at start-up. Useful for
-    throwaway runs against a cluster you do not own the terraform for.
+    throwaway runs against a cluster you do not own the terraform for. (Terraform provisioning is
+    done — see below.)
 * SASL/TLS to the brokers: the Kafka client configuration is built in code and has no passthrough
   for security properties, so only PLAINTEXT is reachable today
 * measuring how long recovery takes after an outage, as distinct from detecting one
@@ -293,6 +310,34 @@ value actually took effect rather than merely being present — for example the 
 `kproducer_producer_acknowledged_total`.
 
 ---
+## Provisioning topics with Terraform
+
+`terraform/topics.tf` creates every topic the application is configured to use. The names live once
+in `main.tf` (`local.topics`) and are read by both the Consul configuration and the `kafka_topic`
+resources, so a rename cannot leave the application pointing at a topic that was never created.
+
+```shell
+cd terraform
+tofu init
+tofu apply -target=kafka_topic.probe        # topics only, leaving Consul KV alone
+```
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `kafka_bootstrap_servers` | the three `*.podspace.internal` brokers | must be reachable from wherever Terraform runs |
+| `topic_partitions` | `3` | more than one is what makes partition behaviour observable |
+| `topic_replication_factor` | `3` | at `1` a broker-failure test measures data loss, not failover |
+| `topic_min_insync_replicas` | `2` | writes rejected below this, with `acks=all` |
+| `topic_retention_ms` | `21600000` (6h) | a probe's output has no value beyond the run |
+
+**Run it from inside the VPC.** The Kafka provider connects to the brokers directly rather than
+through an API, and they advertise internal-only names — the same constraint that forces the probe
+itself to run there.
+
+A `check` block rejects `min.insync.replicas >= replication_factor` before anything is created:
+that combination means every write needs every replica, so losing a single broker halts production
+entirely — the opposite of what replication is for.
+
 ## Property reference
 
 Every property below is settable by any of the configuration layers above, and each maps to an
