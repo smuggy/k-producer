@@ -1,7 +1,7 @@
 package net.podspace.domain;
 
 import net.podspace.messaging.MessageGenerator;
-import net.podspace.messaging.MessageGenerator.Generated;
+// import net.podspace.messaging.MessageGenerator.Generated;
 import net.podspace.pipeline.DeliveryLedger;
 
 import java.util.Random;
@@ -21,7 +21,7 @@ public class TemperatureGenerator implements MessageGenerator {
      * How many distinct partition keys to cycle through. Zero means send without a key, leaving
      * placement to Kafka's sticky partitioner - the right default for raw throughput. A positive
      * value spreads messages deterministically over that many keys, which is what makes
-     * per-partition behaviour reproducible: the same key always hashes to the same partition, and
+     * per-partition behavior reproducible: the same key always hashes to the same partition, and
      * Kafka orders within a partition, so out-of-order arrivals become meaningful rather than
      * expected noise.
      */

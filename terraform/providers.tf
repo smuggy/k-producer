@@ -5,23 +5,23 @@
 #   datacenter = "us-east-2"
 # }
 
-provider consul {
-  address    = "consul.ps.internal:8501"
-  scheme     = "https"
-#  token      = "---put valid token here---"
-  datacenter = "local-net-1"
-}
-
 # provider consul {
-#   address    = "prometheus.podspace.net:443"
-#   header {
-#     name  = "X-Consul-Prefix"
-#     value = "/consul"
-#   }
+#   address    = "consul.ps.internal:8501"
 #   scheme     = "https"
-#   token = "----"
-#   datacenter = "us-east-2"
+# #  token      = "---put valid token here---"
+#   datacenter = "local-net-1"
 # }
+
+provider consul {
+  address    = "prometheus.podspace.net:443"
+  header {
+    name  = "X-Consul-Prefix"
+    value = "/consul"
+  }
+  scheme     = "https"
+  # token = "----"
+  datacenter = "us-east-2"
+}
 
 #terraform {
 #  required_providers {
