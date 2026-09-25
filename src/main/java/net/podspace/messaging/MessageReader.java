@@ -2,8 +2,12 @@ package net.podspace.messaging;
 
 import java.util.List;
 
+/**
+ * Reads encoded messages from the transport. Bytes rather than String - see {@link MessageWriter}
+ * for why a String-based transport cannot carry Avro without corrupting it.
+ */
 public interface MessageReader {
-    List<String> readMessage();
+    List<byte[]> readMessage();
 
     default void close() {}
 

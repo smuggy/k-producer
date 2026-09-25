@@ -22,7 +22,7 @@ public class QueueManager implements MessageWriter, MessageReader {
     private static final int MAX_QUEUE_SIZE = 500;
     /** Caps one read batch independently of queue capacity, so the two can be tuned separately. */
     private static final int MAX_BATCH_SIZE = 100;
-    private final BlockingQueue<String> queue;
+    private final BlockingQueue<byte[]> queue;
 
     public QueueManager() {
         queue = new ArrayBlockingQueue<>(MAX_QUEUE_SIZE);
@@ -34,8 +34,8 @@ public class QueueManager implements MessageWriter, MessageReader {
      * queue filled with no consumer draining it. A full queue drops the message, matching the
      * fire-and-forget behaviour of the other writers.
      */
-    public void writeMessage(String message) {
-        logger.debug("Writing message: {}", message);
+    public void writeMessage(byte[] message) {
+        logger.debug("Writing message of {} bytes", message.length);
         try {
             if (!queue.offer(message, QUEUE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 logger.warn("Queue still full after {}s, dropping message.", QUEUE_TIMEOUT_SECONDS);
@@ -52,12 +52,12 @@ public class QueueManager implements MessageWriter, MessageReader {
      * /consumer/stop hang whenever the queue stayed empty. The poll stays timed so that an empty
      * queue paces the caller instead of spinning it.
      */
-    public List<String> readMessage() {
-        List<String> ret = new ArrayList<>();
+    public List<byte[]> readMessage() {
+        List<byte[]> ret = new ArrayList<>();
         try {
             // poll blocks for at least one message (and paces the caller when the queue is empty);
             // drainTo then sweeps up whatever else is already waiting without blocking again.
-            String message = queue.poll(QUEUE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            byte[] message = queue.poll(QUEUE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             if (message != null) {
                 ret.add(message);
                 queue.drainTo(ret, MAX_BATCH_SIZE - ret.size());

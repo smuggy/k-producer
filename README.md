@@ -338,6 +338,71 @@ A `check` block rejects `min.insync.replicas >= replication_factor` before anyth
 that combination means every write needs every replica, so losing a single broker halts production
 entirely — the opposite of what replication is for.
 
+## Payload format
+
+The reading measured is identical whether it travels as JSON or Avro — only the encoding differs,
+so a run can be switched without changing what is being tested.
+
+```shell
+--myapp.payload.format=avro --myapp.schemaRegistry.url=http://kafka-00.podspace.internal:8081
+```
+
+JSON is the default: it needs no registry and is readable straight off the topic with
+`kafka-console-consumer`, which matters for a probe that has to run anywhere. Avro exercises the
+registry as a real availability dependency alongside the brokers — one that is slow, unreachable or
+rejecting an incompatible schema is a production failure mode JSON mode cannot reproduce.
+
+Messages are written in Confluent's wire format (a `0x00` magic byte, a four-byte schema id, then
+the Avro body), so anything else on the topic can read them — verified with
+`kafka-avro-console-consumer`, which decodes them field for field.
+
+**The consumer needs no format setting.** It detects each message and decodes accordingly, because
+the two are unambiguous on the wire — Avro starts `0x00`, JSON starts `{`. This matters during a
+migration, when a topic carries both: a consumer pinned to one format would discard every message
+in the other while reporting itself perfectly healthy, and the reconciliation figures would show
+total loss against a cluster that delivered everything. Setting `schemaRegistry.url` is what adds
+the Avro codec to the consumer's list; `payload.format` only decides what it *publishes*.
+
+### Why the transport carries bytes
+
+`MessageReader`/`MessageWriter` deal in `byte[]` rather than `String`. Avro's binary encoding is
+not valid UTF-8, and round-tripping it through a Java String replaces the invalid sequences with
+U+FFFD — measured at 89 bytes in, 95 bytes out, irreversibly. A String-based transport would
+corrupt every Avro message. It also means the relay forwards a payload it never has to interpret,
+which is what preserves the originating timestamp that end-to-end latency is measured against.
+
+## Registering the message schema
+
+`src/main/resources/avro/temperature.avsc` defines the message as an Avro record, field-for-field
+equivalent to the JSON payload so a run can switch format without changing what is measured.
+`scripts/register-schema.sh` publishes it to a Confluent Schema Registry:
+
+```shell
+./scripts/register-schema.sh --dry-run        # show what would be sent
+./scripts/register-schema.sh --check          # compatibility only, registers nothing
+./scripts/register-schema.sh                  # register for every configured topic
+./scripts/register-schema.sh --list           # what is registered now
+```
+
+Re-running is safe: registering an identical schema returns the existing id rather than creating a
+new version.
+
+**Subjects are named `<topic>-value`**, which is what Confluent's default `TopicNameStrategy`
+expects. Registering under the bare topic name is the usual reason a serializer cannot find a
+schema that is plainly visible in the registry UI, so the script applies the suffix itself.
+
+The registry listens inside the VPC, so run this from a host that can reach it — the same
+constraint that applies to the brokers and to `tofu apply`.
+
+Two schema decisions carry constraints from elsewhere in this document:
+
+* **`time` is a `string`, not a logical timestamp type.** Latency is this value subtracted from the
+  consume-side clock, so a relay must forward it unchanged; keeping the exact characters makes a
+  verbatim relay obviously correct, where a logical type invites a re-encode that would silently
+  rewrite it.
+* **`run` and `seq` have defaults.** A consumer on an older schema still reads newer messages, so
+  delivery reconciliation degrades rather than breaks.
+
 ## Property reference
 
 Every property below is settable by any of the configuration layers above, and each maps to an

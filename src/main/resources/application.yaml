@@ -75,6 +75,21 @@ myapp:
   #   messages: 5000
   #   timeoutSeconds: 120
   #   drainSeconds: 30
+  # json | avro. The reading measured is identical either way; this decides only the encoding.
+  # JSON is the default because it needs no registry and can be read straight off the topic with
+  # kafka-console-consumer, which a probe that has to run anywhere depends on. Avro exercises the
+  # schema registry as a real availability dependency alongside the brokers - one that is slow,
+  # unreachable or rejecting a schema is a failure mode JSON mode cannot reproduce.
+  #
+  # The CONSUMER does not need this set: it detects the format per message, because a topic can
+  # carry both during a migration and a consumer pinned to one would silently discard the rest.
+  payload:
+    format: json
+  schemaRegistry:
+    # Required when payload.format is avro; startup fails without it rather than producing nothing.
+    # Also enables Avro DECODING even in json mode, so this instance can read what others publish.
+    url: ""
+    cacheCapacity: 100
   publisher:
     # Distinct partition keys to cycle through. 0 sends unkeyed, letting Kafka's sticky
     # partitioner place messages - correct for raw throughput. A positive value pins each message

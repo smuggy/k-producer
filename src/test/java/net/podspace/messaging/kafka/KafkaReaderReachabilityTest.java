@@ -29,7 +29,7 @@ class KafkaReaderReachabilityTest {
     private static final Duration TINY = Duration.ofNanos(1);
 
     /** A consumer whose endOffsets fails the way an unreachable cluster does. */
-    private static class UnreachableAfterAssignment extends MockConsumer<String, String> {
+    private static class UnreachableAfterAssignment extends MockConsumer<String, byte[]> {
         int endOffsetCalls;
         boolean reachable = true;
 

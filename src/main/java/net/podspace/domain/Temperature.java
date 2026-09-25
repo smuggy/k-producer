@@ -17,7 +17,7 @@ public class Temperature implements Comparable<Temperature> {
     @JsonProperty("temp")
     private double temp;
     @JsonProperty("id")
-    private String timeId;
+    private String tempId;
     @JsonProperty("filler")
     private String filler = "";
     /** Identifies the publisher run, so a consumer can ignore messages left by earlier runs. */
@@ -38,7 +38,7 @@ public class Temperature implements Comparable<Temperature> {
         // consumer sit in different zones - it would silently misreport latency by hours.
         this.time = Instant.now().toString();
         this.scale = scale;
-        this.timeId = UUID.randomUUID().toString();
+        this.tempId = UUID.randomUUID().toString();
         setFiller(filler);
     }
 
@@ -48,6 +48,27 @@ public class Temperature implements Comparable<Temperature> {
 
     public static Temperature createFahrenheitTemp(double temp, String filler) {
         return new Temperature(temp, TempScale.FAHRENHEIT, filler, "", -1);
+    }
+
+    /**
+     * Rebuilds a message that arrived off the topic, preserving the values it was created with.
+     *
+     * <p>Distinct from the create* factories on purpose: those stamp a fresh timestamp and id,
+     * which is exactly wrong for a message being decoded - latency is measured against the
+     * ORIGINAL timestamp, so regenerating it here would zero out the very thing being measured.
+     * Jackson reaches the fields directly, so only non-Jackson decoders need this.
+     */
+    public static Temperature received(String tempId, double temp, String time, TempScale scale,
+                                       String run, long seq, String filler) {
+        Temperature t = new Temperature();
+        t.tempId = tempId;
+        t.temp = temp;
+        t.time = time;
+        t.scale = scale;
+        t.run = (run == null) ? "" : run;
+        t.seq = seq;
+        t.filler = (filler == null) ? "" : filler;
+        return t;
     }
 
     public String getRun() {
@@ -66,8 +87,8 @@ public class Temperature implements Comparable<Temperature> {
         this.filler = (filler == null) ? "" : filler;
     }
 
-    public String getTimeId() {
-        return timeId;
+    public String getTempId() {
+        return tempId;
     }
 
     public TempScale getScale() {
@@ -84,7 +105,7 @@ public class Temperature implements Comparable<Temperature> {
 
     public String toJsonString() {
         return "{" +
-                "\"id\":\"" + timeId +
+                "\"id\":\"" + tempId +
                 "\",\"temp\":" + temp +
                 ",\"time\":\"" + time +
                 "\",\"scale\":\"" + scale.getScale() +

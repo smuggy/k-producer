@@ -23,7 +23,7 @@ class UnsentReconciliationTest {
         private final DeliveryLedger ledger;
         Gen(DeliveryLedger ledger) { this.ledger = ledger; }
         @Override public Generated createMessage() {
-            return new Generated(null, "{}", ledger.nextSequence());
+            return new Generated(null, "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8), ledger.nextSequence());
         }
         @Override public void setFillerSize(int size) { }
         @Override public int getFillerSize() { return 0; }

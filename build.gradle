@@ -7,7 +7,7 @@ plugins {
 }
 
 group = 'net.podspace'
-version = '0.5.5'
+version = '0.5.6'
 
 // Pin the bytecode/API level to the JRE in the Docker image, whatever JDK runs Gradle. Without
 // this the class file version silently tracks the local JDK - a JDK 26 build produced major
@@ -19,6 +19,9 @@ tasks.withType(JavaCompile).configureEach {
 
 repositories {
     mavenCentral()
+    // Confluent's Avro serializer and schema registry client are not on Maven Central. Only the
+    // Avro payload format needs them; JSON mode never touches either.
+    maven { url = 'https://packages.confluent.io/maven/' }
 }
 
 application {
@@ -162,6 +165,28 @@ tagDockerImage.dependsOn buildDockerImage
 pushDockerImage.dependsOn tagDockerImage
 
 dependencies {
+    // Avro payload support. Pinned explicitly because neither is BOM-managed by Spring Boot, so a
+    // silent version change here would not be caught the way a starter's would.
+    implementation 'org.apache.avro:avro:1.12.2'
+    // Confluent 8.x tracks Apache Kafka 4.x, which is why this is on 8.x rather than 7.x - the
+    // 7.7.1 line bundles a Kafka 3.7 client and would have run a major version behind the broker.
+    //
+    // The exclusions stay regardless: Confluent republishes kafka-clients under its own version
+    // scheme, so Gradle compares "8.2.4-ccs" against the Boot-managed "4.1.2", decides Confluent's
+    // is newer and silently takes it. That is how the client version stops being the BOM's
+    // decision. Excluded from the schema-registry client too, which is where the transitive
+    // actually enters rather than from the serializer directly. Verify with:
+    //   ./gradlew dependencyInsight --configuration runtimeClasspath --dependency kafka-clients
+    implementation('io.confluent:kafka-avro-serializer:8.2.4') {
+        exclude group: 'org.apache.kafka', module: 'kafka-clients'
+    }
+    implementation('io.confluent:kafka-schema-registry-client:8.2.4') {
+        exclude group: 'org.apache.kafka', module: 'kafka-clients'
+    }
+    implementation('io.confluent:kafka-schema-serializer:8.2.4') {
+        exclude group: 'org.apache.kafka', module: 'kafka-clients'
+    }
+
     // Boot's BOM manages versions for everything it knows about (starters, kafka, micrometer,
     // slf4j, log4j, junit), so those are declared without a version below and stay consistent
     // with the Boot release. Declaring a version anywhere below is therefore a deliberate

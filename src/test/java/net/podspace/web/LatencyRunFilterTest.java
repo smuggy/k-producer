@@ -25,13 +25,13 @@ class LatencyRunFilterTest {
 
     /** Hands over a fixed batch once, then nothing, so the watcher loop settles. */
     private static class OneShotReader implements MessageReader {
-        private final List<String> batch;
+        private final List<byte[]> batch;
         private final CountDownLatch delivered = new CountDownLatch(1);
         private boolean sent;
 
-        OneShotReader(List<String> batch) { this.batch = batch; }
+        OneShotReader(List<byte[]> batch) { this.batch = batch; }
 
-        @Override public synchronized List<String> readMessage() {
+        @Override public synchronized List<byte[]> readMessage() {
             if (sent) {
                 return List.of();
             }
@@ -42,8 +42,9 @@ class LatencyRunFilterTest {
         @Override public boolean isReady() { return true; }
     }
 
-    private static String message(String runId, long seq) {
-        return Temperature.createCelsiusTemp(21.5, "", runId, seq).toJsonString();
+    private static byte[] message(String runId, long seq) {
+        return Temperature.createCelsiusTemp(21.5, "", runId, seq)
+                .toJsonString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     @Test

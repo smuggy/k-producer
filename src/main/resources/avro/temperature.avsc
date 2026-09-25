@@ -1,0 +1,51 @@
+{
+  "type": "record",
+  "name": "Temperature",
+  "namespace": "net.podspace.domain.avro",
+  "doc": "A probe reading. Field-for-field equivalent to the JSON payload, so a run can be switched between formats without changing what is measured.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "string",
+      "doc": "Unique id for this reading. Maps to Temperature.tempId."
+    },
+    {
+      "name": "temp",
+      "type": "double",
+      "doc": "The reading itself. Arbitrary - the probe measures the pipeline, not the weather."
+    },
+    {
+      "name": "time",
+      "type": "string",
+      "doc": "ISO-8601 instant in UTC, written at creation. MUST be carried through a relay unchanged: end-to-end latency is this value subtracted from the consume-side clock, so rewriting it during a re-serialize silently destroys the measurement. String rather than a logical timestamp type deliberately - it is compared as an instant, and keeping the exact characters makes a verbatim relay obviously correct."
+    },
+    {
+      "name": "scale",
+      "type": {
+        "type": "enum",
+        "name": "TempScale",
+        "symbols": ["C", "F"],
+        "doc": "Celsius or Fahrenheit."
+      },
+      "doc": "Unit of temp."
+    },
+    {
+      "name": "run",
+      "type": "string",
+      "default": "",
+      "doc": "Run id of the producing instance. Delivery reconciliation excludes messages from other runs, and latency is only recorded for this run - without it, backlog left on the topic is measured as though it were current traffic."
+    },
+    {
+      "name": "seq",
+      "type": "long",
+      "default": -1,
+      "doc": "Monotonic sequence within the run. The ledger issues these, so produced counts are exact rather than inferred, and gaps, duplicates and reordering fall out of comparing what came back. -1 means untracked."
+    },
+    {
+      "name": "filler",
+      "type": "string",
+      "default": "",
+      "doc": "Padding to reach a target message size. Bounded by myapp.publisher.fillerSize."
+    }
+  ]
+}

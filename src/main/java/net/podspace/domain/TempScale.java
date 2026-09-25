@@ -14,4 +14,17 @@ public enum TempScale {
     public String getScale() {
         return this.scale;
     }
+
+    /**
+     * Resolves the wire symbol ("C"/"F") back to a constant. Needed by any decoder that is not
+     * Jackson - Avro carries the symbol, not the enum name.
+     */
+    public static TempScale fromSymbol(String symbol) {
+        for (TempScale s : values()) {
+            if (s.scale.equalsIgnoreCase(symbol)) {
+                return s;
+            }
+        }
+        throw new IllegalArgumentException("unknown temperature scale: " + symbol);
+    }
 }

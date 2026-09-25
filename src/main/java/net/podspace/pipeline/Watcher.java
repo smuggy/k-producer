@@ -95,15 +95,17 @@ public class Watcher<T extends Comparable<T>> implements EngineStatus {
 
     /** One pass: read whatever is available and record a latency sample for each parsed message. */
     private void pollAndRecord() {
-        List<String> list = reader.readMessage();
+        List<byte[]> list = reader.readMessage();
         if (list.isEmpty()) {
             logger.info("No message available... wait again.");
             return;
         }
-        for (String mess : list) {
+        for (byte[] mess : list) {
             Optional<Pair<T, Integer>> val = consumer.getMessage(mess);
             if (val.isEmpty()) {
-                logger.info("No value present or parsable in message: {}", mess);
+                // Logged as a length, not content: the payload may be binary, and dumping raw
+                // Avro into the log is noise at best.
+                logger.info("No value present or parsable in message of {} bytes", mess.length);
                 continue;
             }
             logger.debug("Value is: {}", val.get());

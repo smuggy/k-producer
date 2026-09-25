@@ -18,9 +18,11 @@ import java.util.Map;
  * clock and the result carries no cross-machine clock skew. That is what makes the measurement
  * usable between availability zones, where skew can easily exceed the latency being measured.
  *
- * <p>Messages are relayed as raw strings and never deserialized. That preserves the originating
- * timestamp exactly - re-serializing would rewrite it and destroy the measurement - and means the
- * relay works for any payload, not just the temperature messages this app happens to generate.
+ * <p>Messages are relayed as raw bytes and never decoded. That preserves the originating timestamp
+ * exactly - re-encoding would rewrite it and destroy the measurement - and means the relay works
+ * for any payload, JSON or Avro, not just the temperature messages this app happens to generate.
+ * Bytes rather than strings matters here specifically: Avro is not valid UTF-8, so a relay that
+ * went through a String would corrupt every message it forwarded.
  */
 public class Relay implements EngineStatus {
     private static final Logger logger = LoggerFactory.getLogger(Relay.class);
@@ -111,12 +113,12 @@ public class Relay implements EngineStatus {
 
     /** One pass: forward whatever is currently available, unchanged. */
     private void relayBatch() {
-        List<String> batch = reader.readMessage();
+        List<byte[]> batch = reader.readMessage();
         if (batch.isEmpty()) {
             logger.debug("Nothing to echo.");
             return;
         }
-        for (String message : batch) {
+        for (byte[] message : batch) {
             writer.writeMessage(message);
             relayed.increment();
         }

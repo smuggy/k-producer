@@ -31,7 +31,7 @@ class EngineShutdownTest {
 
     private static MessageReader idleReader() {
         return new MessageReader() {
-            @Override public List<String> readMessage() { return Collections.emptyList(); }
+            @Override public List<byte[]> readMessage() { return Collections.emptyList(); }
             @Override public boolean isReady() { return true; }
         };
     }

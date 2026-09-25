@@ -37,6 +37,10 @@ class PipelineHealthIndicatorTest {
         @Override public String getLastFailure() { return lastFailure; }
     }
 
+    private static byte[] b(String s) {
+        return s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     private static Status statusOf(EngineStatus e) {
         return new PipelineHealthIndicator(e).health().getStatus();
     }
@@ -106,7 +110,7 @@ class PipelineHealthIndicatorTest {
     void aRunningRelayWhoseReadsKeepThrowingGoesDown() throws Exception {
         CountDownLatch failed = new CountDownLatch(1);
         Relay relay = new Relay(new MessageReader() {
-            @Override public List<String> readMessage() {
+            @Override public List<byte[]> readMessage() {
                 failed.countDown();
                 throw new IllegalStateException("broker is gone");
             }
@@ -134,12 +138,12 @@ class PipelineHealthIndicatorTest {
     void aRelayReportsWhatItHasForwarded() throws Exception {
         CountDownLatch relayed = new CountDownLatch(1);
         Relay relay = new Relay(new MessageReader() {
-            @Override public List<String> readMessage() {
+            @Override public List<byte[]> readMessage() {
                 if (relayed.getCount() == 0) {
                     return Collections.emptyList();
                 }
                 relayed.countDown();
-                return List.of("a", "b", "c");
+                return List.of(b("a"), b("b"), b("c"));
             }
             @Override public boolean isReady() { return true; }
         }, m -> { }, new SimpleMeterRegistry());
@@ -186,7 +190,7 @@ class PipelineHealthIndicatorTest {
     void aRelayWithNoAssignmentIsDownWhileRunning() throws Exception {
         AtomicInteger polls = new AtomicInteger();
         Relay relay = new Relay(new MessageReader() {
-            @Override public List<String> readMessage() {
+            @Override public List<byte[]> readMessage() {
                 polls.incrementAndGet();
                 return Collections.emptyList();
             }

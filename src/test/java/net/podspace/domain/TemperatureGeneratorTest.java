@@ -51,7 +51,8 @@ class TemperatureGeneratorTest {
     void producedFillerMatchesTheConfiguredSize() {
         TemperatureGenerator g = generator();
         g.setFillerSize(256);
-        String json = g.createMessage().payload();
+        String json = new String(g.createMessage().payload(),
+                java.nio.charset.StandardCharsets.UTF_8);
         Assertions.assertTrue(json.length() >= 256, "filler should be present in the message");
     }
 }

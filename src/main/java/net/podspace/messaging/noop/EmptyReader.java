@@ -14,7 +14,7 @@ public class EmptyReader implements MessageReader{
         logger.info("in empty reader constructor");
     }
     @Override
-    public List<String> readMessage() {
+    public List<byte[]> readMessage() {
         try {
             Thread.sleep(Duration.ofSeconds(5));
         } catch (InterruptedException ignored){}

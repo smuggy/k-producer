@@ -27,7 +27,7 @@ class VerificationAttachTest {
 
     /** Never attaches, the way a consumer against unreachable brokers behaves. */
     private static class NeverAttachedReader implements MessageReader {
-        @Override public List<String> readMessage() { return Collections.emptyList(); }
+        @Override public List<byte[]> readMessage() { return Collections.emptyList(); }
         @Override public boolean isReady() { return false; }
     }
 

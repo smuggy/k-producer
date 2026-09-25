@@ -156,7 +156,7 @@ public class ConsumerController {
             latency.record(d);
 
             ItemStat stat = new ItemStat();
-            stat.id = t.getTimeId();
+            stat.id = t.getTempId();
             stat.millis = d.toNanos() / 1_000_000.0;
             stat.size = envelope.size();
             synchronized (recentLock) {

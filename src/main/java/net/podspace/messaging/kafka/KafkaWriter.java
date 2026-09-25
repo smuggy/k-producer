@@ -17,14 +17,14 @@ import java.util.concurrent.TimeUnit;
 public class KafkaWriter implements MessageWriter {
     private static final Logger logger = LoggerFactory.getLogger(KafkaWriter.class);
     private final String topicName;
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final KafkaTemplate<String, byte[]> kafkaTemplate;
     private final MeterRegistry registry;
     private final Counter acknowledged;
     private final Timer ackLatency;
     /** Error counters by exception type, created on first sight. Bounded by the client's error set. */
     private final Map<String, Counter> errors = new ConcurrentHashMap<>();
 
-    public KafkaWriter(KafkaTemplate<String, String> kafkaTemplate, String topicName, MeterRegistry registry) {
+    public KafkaWriter(KafkaTemplate<String, byte[]> kafkaTemplate, String topicName, MeterRegistry registry) {
         this.kafkaTemplate = kafkaTemplate;
         this.topicName = topicName;
         this.registry = registry;
@@ -42,14 +42,14 @@ public class KafkaWriter implements MessageWriter {
     }
 
     @Override
-    public void writeMessage(String message) {
+    public void writeMessage(byte[] message) {
         writeMessage(null, message);
     }
 
     @Override
-    public void writeMessage(String key, String message) {
+    public void writeMessage(String key, byte[] message) {
         long startNanos = System.nanoTime();
-        CompletableFuture<SendResult<String, String>> future;
+        CompletableFuture<SendResult<String, byte[]>> future;
         try {
             // A null key leaves partition choice to the sticky partitioner, which is the right
             // default for pure throughput; a key pins the message to a partition by hash.

@@ -4,6 +4,11 @@ import io.micrometer.core.instrument.MeterRegistry;
 import net.podspace.pipeline.Watcher;
 import net.podspace.domain.Temperature;
 import net.podspace.domain.TemperatureConsumer;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import net.podspace.domain.codec.AvroTemperatureCodec;
+import net.podspace.domain.codec.JsonTemperatureCodec;
+import net.podspace.domain.codec.TemperatureCodec;
 import net.podspace.domain.TemperatureGenerator;
 import net.podspace.management.MBeanContainer;
 import net.podspace.management.ManagementAgent;
@@ -23,6 +28,8 @@ import net.podspace.pipeline.Relay;
 import net.podspace.pipeline.PublisherManager;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
@@ -41,6 +48,7 @@ import jakarta.annotation.PostConstruct;
 import javax.management.NotCompliantMBeanException;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Configuration
@@ -114,6 +122,18 @@ public class AppConfig {
     private int sleepConfig;
     @Value("${myapp.publisher.fillerSize:0}")
     private int fillerSize;
+    // json | avro. The reading is identical either way - this decides only how it is encoded.
+    // JSON stays the default because it needs no registry and is readable straight off the topic
+    // with kafka-console-consumer, which matters for a probe that has to run anywhere.
+    @Value("${myapp.payload.format:json}")
+    private String payloadFormat;
+
+    @Value("${myapp.schemaRegistry.url:}")
+    private String schemaRegistryUrl;
+
+    @Value("${myapp.schemaRegistry.cacheCapacity:100}")
+    private int schemaRegistryCacheCapacity;
+
     @Value("${myapp.publisher.keyCount:0}")
     private int keyCount;
 
@@ -219,7 +239,7 @@ public class AppConfig {
         return new KafkaWriter(new KafkaTemplate<>(producerFactory()), writerTopic(), meterRegistry);
     }
 
-    private ProducerFactory<String, String> producerFactory() {
+    private ProducerFactory<String, byte[]> producerFactory() {
         Map<String, Object> configProps = new HashMap<>();
         logger.debug("Producer factory: bootstrap server: {}", bootstrapAddress);
         configProps.put(
@@ -228,20 +248,23 @@ public class AppConfig {
         configProps.put(
                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                 StringSerializer.class);
+        // Bytes, always. The application owns the payload encoding - JSON or Avro - so the client
+        // must not second-guess it. Swapping in KafkaAvroSerializer here instead would move that
+        // decision into the transport and make a mixed-format topic impossible to consume.
         configProps.put(
                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-                StringSerializer.class);
+                ByteArraySerializer.class);
         configProps.put(ProducerConfig.ACKS_CONFIG, acksConfig);
         // Bounded and single-attempt, so the retry decision stays with WorkerLoop - only the loop
         // can see the quit flag. See the blocking-call rule in CLAUDE.md.
         configProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs);
         configProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
-        ProducerFactory<String, String> pf = new DefaultKafkaProducerFactory<>(configProps);
+        ProducerFactory<String, byte[]> pf = new DefaultKafkaProducerFactory<String, byte[]>(configProps);
         pf.addListener(new MicrometerProducerListener<>(this.meterRegistry));
         return pf;
     }
 
-    private ConsumerFactory<String, String> consumerFactory() {
+    private ConsumerFactory<String, byte[]> consumerFactory() {
         Map<String, Object> configProps = new HashMap<>();
         logger.info("Consumer: bootstrap server: {}", bootstrapAddress);
         configProps.put(
@@ -261,8 +284,8 @@ public class AppConfig {
                 StringDeserializer.class.getName());
         configProps.put(
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                StringDeserializer.class.getName());
-        ConsumerFactory<String, String> cf = new DefaultKafkaConsumerFactory<>(configProps);
+                ByteArrayDeserializer.class.getName());
+        ConsumerFactory<String, byte[]> cf = new DefaultKafkaConsumerFactory<String, byte[]>(configProps);
         cf.addListener(new MicrometerConsumerListener<>(this.meterRegistry));
         return cf;
     }
@@ -285,9 +308,49 @@ public class AppConfig {
      * messageReader they depend on is closed. That ordering matters: closing the reader first
      * makes an in-flight poll throw, which is how it happened to work before.
      */
+    /**
+     * The codec the publisher encodes with. Avro needs a registry; asking for it without one
+     * configured fails here rather than on the first send, because a probe that starts and then
+     * silently produces nothing is worse than one that refuses to start.
+     */
+    private TemperatureCodec writerCodec() {
+        if (!"avro".equalsIgnoreCase(payloadFormat)) {
+            if (!"json".equalsIgnoreCase(payloadFormat)) {
+                logger.warn("Unknown myapp.payload.format '{}'; using json.", payloadFormat);
+            }
+            return new JsonTemperatureCodec();
+        }
+        if (schemaRegistryUrl.isBlank()) {
+            throw new IllegalStateException(
+                    "myapp.payload.format=avro needs myapp.schemaRegistry.url to be set");
+        }
+        return new AvroTemperatureCodec(schemaRegistryClient(), writerTopic(),
+                Map.of("schema.registry.url", schemaRegistryUrl));
+    }
+
+    /**
+     * Codecs the consumer will try, in order. Both are offered whenever a registry is configured,
+     * regardless of what this instance publishes: the topic can hold either format at once during
+     * a migration, and a consumer that only understood its own output would report the rest as
+     * loss the cluster never caused.
+     */
+    private List<TemperatureCodec> readerCodecs() {
+        if (schemaRegistryUrl.isBlank()) {
+            return List.of(new JsonTemperatureCodec());
+        }
+        return List.of(
+                new JsonTemperatureCodec(),
+                new AvroTemperatureCodec(schemaRegistryClient(), readerTopic(),
+                        Map.of("schema.registry.url", schemaRegistryUrl)));
+    }
+
+    private SchemaRegistryClient schemaRegistryClient() {
+        return new CachedSchemaRegistryClient(schemaRegistryUrl, schemaRegistryCacheCapacity);
+    }
+
     @Bean(destroyMethod = "teardown")
     public Publisher publisher() {
-        var producer = new TemperatureGenerator(deliveryLedger(), keyCount);
+        var producer = new TemperatureGenerator(deliveryLedger(), keyCount, writerCodec());
         var publisher = new Publisher(producer, messageWriter(), deliveryLedger());
         publisher.setSleep(sleepConfig);
         publisher.setFillerSize(fillerSize);
@@ -297,7 +360,7 @@ public class AppConfig {
 
     @Bean(destroyMethod = "teardown")
     public Watcher<Temperature> watcher() {
-        var consumer = new TemperatureConsumer();
+        var consumer = new TemperatureConsumer(readerCodecs());
         return new Watcher<>(consumer, messageReader());
     }
 

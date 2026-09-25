@@ -2,6 +2,8 @@ package net.podspace.domain;
 
 import net.podspace.messaging.MessageGenerator;
 // import net.podspace.messaging.MessageGenerator.Generated;
+import net.podspace.domain.codec.JsonTemperatureCodec;
+import net.podspace.domain.codec.TemperatureCodec;
 import net.podspace.pipeline.DeliveryLedger;
 
 import java.util.Random;
@@ -26,14 +28,21 @@ public class TemperatureGenerator implements MessageGenerator {
      * expected noise.
      */
     private final int keyCount;
+    /** Decides the wire format. The reading itself is identical either way. */
+    private final TemperatureCodec codec;
 
     public TemperatureGenerator(DeliveryLedger ledger) {
-        this(ledger, 0);
+        this(ledger, 0, new JsonTemperatureCodec());
     }
 
     public TemperatureGenerator(DeliveryLedger ledger, int keyCount) {
+        this(ledger, keyCount, new JsonTemperatureCodec());
+    }
+
+    public TemperatureGenerator(DeliveryLedger ledger, int keyCount, TemperatureCodec codec) {
         this.ledger = ledger;
         this.keyCount = Math.max(0, keyCount);
+        this.codec = codec;
     }
 
     public Generated createMessage() {
@@ -43,7 +52,7 @@ public class TemperatureGenerator implements MessageGenerator {
         long sequence = ledger.nextSequence();
         Temperature t = Temperature.createCelsiusTemp(
                 RANDOM.nextDouble(100), generateFiller(), ledger.getRunId(), sequence);
-        return new Generated(keyFor(sequence), t.toJsonString(), sequence);
+        return new Generated(keyFor(sequence), codec.encode(t), sequence);
     }
 
     public int getFillerSize() {

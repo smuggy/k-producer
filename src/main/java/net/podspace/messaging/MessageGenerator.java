@@ -9,13 +9,18 @@ public interface MessageGenerator {
      * retire it if the send fails. Reading it back off the generator afterwards would work only
      * while exactly one thread publishes, which is an invariant nothing in the type system keeps.
      */
-    record Generated(String key, String payload, long sequence) {
+    record Generated(String key, byte[] payload, long sequence) {
         /** For generators that do not take part in delivery reconciliation. */
         public static final long NO_SEQUENCE = -1L;
 
         /** No key and no sequence: an unkeyed message outside delivery reconciliation. */
-        public static Generated untracked(String payload) {
+        public static Generated untracked(byte[] payload) {
             return new Generated(null, payload, NO_SEQUENCE);
+        }
+
+        /** Convenience for tests and text transports. */
+        public static Generated untracked(String payload) {
+            return untracked(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         }
     }
 

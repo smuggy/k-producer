@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
     private static final Logger logger = LoggerFactory.getLogger(KafkaReader.class);
-    private final Consumer<String, String> consumer;
+    private final Consumer<String, byte[]> consumer;
     private final MeterRegistry registry;
     private final String topicName;
     // Per-partition meters, created on first sight of a partition. Cardinality is bounded by the
@@ -53,17 +53,17 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
     /** Worker-thread only: last time we had positive evidence the cluster was reachable. */
     private long lastContactNanos = System.nanoTime();
 
-    public KafkaReader(ConsumerFactory<String, String> consumer, String topicName, MeterRegistry registry) {
+    public KafkaReader(ConsumerFactory<String, byte[]> consumer, String topicName, MeterRegistry registry) {
         this(consumer, topicName, registry, REACHABILITY_CHECK_INTERVAL);
     }
 
-    public KafkaReader(ConsumerFactory<String, String> consumer, String topicName,
+    public KafkaReader(ConsumerFactory<String, byte[]> consumer, String topicName,
                        MeterRegistry registry, Duration reachabilityCheckInterval) {
         this(consumer.createConsumer(), topicName, registry, reachabilityCheckInterval);
     }
 
     /** Package-private: takes the consumer directly, so a test can supply a stub. */
-    KafkaReader(Consumer<String, String> consumer, String topicName, MeterRegistry registry,
+    KafkaReader(Consumer<String, byte[]> consumer, String topicName, MeterRegistry registry,
                 Duration reachabilityCheckInterval) {
         this.registry = registry;
         this.topicName = topicName;
@@ -72,12 +72,12 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
         this.consumer.subscribe(Collections.singletonList(topicName), this);
     }
 
-    public List<String> readMessage() {
-        List<String> ret = new ArrayList<>();
+    public List<byte[]> readMessage() {
+        List<byte[]> ret = new ArrayList<>();
         logger.debug("Listening for message.");
 
-        ConsumerRecords<String, String> records = consumer.poll(Duration.ofSeconds(10));
-        for (ConsumerRecord<String, String> r : records) {
+        ConsumerRecords<String, byte[]> records = consumer.poll(Duration.ofSeconds(10));
+        for (ConsumerRecord<String, byte[]> r : records) {
             ret.add(r.value());
             recordMetadata(r);
         }
@@ -143,7 +143,7 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
      * timestamp are discarded, which is exactly the information needed to spot a hot or stalled
      * partition, uneven key distribution, or a single slow replica.
      */
-    private void recordMetadata(ConsumerRecord<String, String> r) {
+    private void recordMetadata(ConsumerRecord<String, byte[]> r) {
         int partition = r.partition();
 
         recordCounters.computeIfAbsent(partition, p -> Counter.builder("kproducer.consumer.records")

@@ -11,7 +11,7 @@ public class EmptyWriter implements MessageWriter {
         count = 0;
     }
     @Override
-    public void writeMessage(String message) {
+    public void writeMessage(byte[] message) {
         logger.info("Writing message number {}", count++);
     }
 }
