@@ -3,6 +3,7 @@ package net.podspace.pipeline;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -35,6 +36,29 @@ final class WorkerLoop {
         void runOnce() throws Exception;
     }
 
+    /**
+     * Notified when a run of consecutive failures ends in a success.
+     *
+     * <p>Detecting an outage is only half of what the failure-testing use case needs; the other
+     * half is how long it lasted, which is the figure a broker upgrade or a failover test is
+     * actually judged on. This is a callback rather than a metric registered here so that
+     * WorkerLoop stays free of Micrometer - the engines own their instrumentation.
+     *
+     * <p>Called on the worker thread immediately before it resumes work, so it must be cheap and
+     * must not throw.
+     */
+    @FunctionalInterface
+    public interface RecoveryListener {
+        void recovered(String loopName, Duration outage, int consecutiveFailures);
+    }
+
+    /** Registers the listener notified when this loop recovers. Replaces any previous one. */
+    public void setRecoveryListener(RecoveryListener listener) {
+        this.recoveryListener = listener == null
+                ? (name, duration, failures) -> { }
+                : listener;
+    }
+
     private final String name;
     private final long pauseMillis;
     private final Task task;
@@ -47,6 +71,10 @@ final class WorkerLoop {
     private final AtomicLong totalFailures = new AtomicLong();
     private volatile int consecutiveFailures;
     private volatile String lastFailure;
+    /** Nanotime of the first failure in the current run of failures; 0 while healthy. */
+    private volatile long outageStartNanos;
+    /** Notified when a run of failures ends. Never null, so the loop needs no null check. */
+    private volatile RecoveryListener recoveryListener = (name, duration, failures) -> { };
     // Guarded by the synchronized lifecycle methods, which serialize the check-then-act on
     // `started` and safely publish `pool` between the starting and stopping request threads.
     private boolean started;
@@ -154,13 +182,26 @@ final class WorkerLoop {
         }
     }
 
-    /** Resets the failure state, logging the transition so recovery is visible and timeable. */
+    /** Resets the failure state and reports how long the outage lasted. */
     private long noteSuccess(long backoffMillis) {
         if (consecutiveFailures > 0) {
-            logger.info("{}: recovered after {} consecutive failures (last: {}).",
-                    name, consecutiveFailures, lastFailure);
+            // Measured from the FIRST failure, not the last: the question being answered is how
+            // long the pipeline was unable to work, which spans every retry and backoff in
+            // between. Nanotime, so it is unaffected by wall-clock adjustment mid-outage.
+            Duration outage = Duration.ofNanos(System.nanoTime() - outageStartNanos);
+            int failures = consecutiveFailures;
+            logger.info("{}: recovered after {} consecutive failures in {} ms (last: {}).",
+                    name, failures, outage.toMillis(), lastFailure);
             consecutiveFailures = 0;
             lastFailure = null;
+            outageStartNanos = 0;
+            try {
+                recoveryListener.recovered(name, outage, failures);
+            } catch (RuntimeException e) {
+                // A listener must never end the loop - that would turn instrumentation into an
+                // outage of its own, during the outage it is there to measure.
+                logger.warn("{}: recovery listener threw; continuing.", name, e);
+            }
             return INITIAL_BACKOFF_MILLIS;
         }
         return backoffMillis;
@@ -168,6 +209,9 @@ final class WorkerLoop {
 
     private void noteFailure(Exception e, long backoffMillis) {
         totalFailures.incrementAndGet();
+        if (consecutiveFailures == 0) {
+            outageStartNanos = System.nanoTime();   // first failure of a new outage
+        }
         consecutiveFailures++;
         lastFailure = e.getClass().getSimpleName() + ": " + e.getMessage();
         logger.error("{}: iteration failed ({} consecutive), retrying in {}ms",
@@ -191,6 +235,16 @@ final class WorkerLoop {
 
     public boolean isHealthy() {
         return consecutiveFailures == 0;
+    }
+
+    /**
+     * How long the current outage has been running, or zero while healthy. Lets a health check or
+     * dashboard show an outage in progress rather than only completed ones, which otherwise stay
+     * invisible until they end.
+     */
+    public Duration getCurrentOutage() {
+        long started = outageStartNanos;
+        return started == 0 ? Duration.ZERO : Duration.ofNanos(System.nanoTime() - started);
     }
 
     /**

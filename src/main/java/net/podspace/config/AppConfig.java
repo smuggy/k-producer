@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -274,7 +275,17 @@ public class AppConfig {
         return new DeliveryLedger(meterRegistry);
     }
 
-    @Bean
+    /*
+     * destroyMethod stops the worker loop when the context closes. Without it nothing called
+     * teardown() on the normal shutdown path: the loops were left running and the JVM tore their
+     * (non-daemon) threads down on exit, so WorkerLoop's escalation - shutdown(), wait, then
+     * shutdownNow() - never ran and a publisher mid-send was killed rather than drained.
+     *
+     * Spring destroys beans in reverse dependency order, so these engines shut down before the
+     * messageReader they depend on is closed. That ordering matters: closing the reader first
+     * makes an in-flight poll throw, which is how it happened to work before.
+     */
+    @Bean(destroyMethod = "teardown")
     public Publisher publisher() {
         var producer = new TemperatureGenerator(deliveryLedger(), keyCount);
         var publisher = new Publisher(producer, messageWriter(), deliveryLedger());
@@ -284,7 +295,7 @@ public class AppConfig {
         return publisher;
     }
 
-    @Bean
+    @Bean(destroyMethod = "teardown")
     public Watcher<Temperature> watcher() {
         var consumer = new TemperatureConsumer();
         return new Watcher<>(consumer, messageReader());
@@ -294,7 +305,7 @@ public class AppConfig {
      * Only the echo role runs a relay, and it starts itself: it is a pure pump with nothing to
      * configure at runtime, so a deployed echo instance should just work.
      */
-    @Bean
+    @Bean(destroyMethod = "teardown")
     @ConditionalOnProperty(name = "myapp.role", havingValue = ECHO)
     public Relay relay() {
         MessageReader reader = messageReader();
@@ -323,6 +334,24 @@ public class AppConfig {
      * engines are never started, so they report running:false and UP, which costs nothing and
      * avoids a second conditional that could drift out of step with the engines'.
      */
+    /**
+     * Binds outage timing for every engine. Registered as an InitializingBean rather than inside
+     * each engine's factory method so the instrumentation lives in one place and the pipeline
+     * classes stay free of Micrometer - the same split PipelineHealthIndicator uses.
+     */
+    @Bean
+    public InitializingBean recoveryMetricsBinder(Publisher publisher, Watcher<Temperature> watcher,
+                                                  ObjectProvider<Relay> relay) {
+        return () -> {
+            RecoveryMetrics.bind(meterRegistry, "publisher", publisher);
+            RecoveryMetrics.bind(meterRegistry, "consumer", watcher);
+            Relay actual = relay.getIfAvailable();
+            if (actual != null) {
+                RecoveryMetrics.bind(meterRegistry, "relay", actual);
+            }
+        };
+    }
+
     @Bean
     public PipelineHealthIndicator publisherHealthIndicator(Publisher publisher) {
         return new PipelineHealthIndicator(publisher);

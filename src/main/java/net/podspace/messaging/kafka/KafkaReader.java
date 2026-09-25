@@ -81,12 +81,16 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
             ret.add(r.value());
             recordMetadata(r);
         }
-        consumer.commitSync(Duration.ofSeconds(1));
         if (records.isEmpty()) {
+            // Before commitSync, deliberately. commitSync throws when the coordinator is gone, and
+            // it used to sit above this - so on a real outage it always threw first and this check
+            // never ran at all, in precisely the scenario it exists for. Ordering it first makes it
+            // the explicit guarantee rather than dead code, and leaves commitSync as the backstop.
             verifyReachable();
         } else {
             lastContactNanos = System.nanoTime();
         }
+        consumer.commitSync(Duration.ofSeconds(1));
         return ret;
     }
 
@@ -108,12 +112,12 @@ public class KafkaReader implements MessageReader, ConsumerRebalanceListener {
      * single-threaded access. It fires at most once per interval, and only while idle, so a busy
      * reader never pays for it.
      *
-     * <p><b>Overlap with commitSync.</b> In practice the commitSync a few lines above usually
-     * detects an outage first - measured at about 15s against a killed broker, versus 30s for this
-     * check - because it makes a coordinator round trip of its own. That cover is not guaranteed
-     * though: it depends on there being an offset to commit, which stops being true with
-     * enable.auto.commit or a reader that does not commit. This stays as the explicit guarantee,
-     * and myapp.kafka.reachabilityCheckSeconds turns it off for anyone who would rather rely on
+     * <p><b>Overlap with commitSync.</b> commitSync also makes a coordinator round trip and also
+     * throws when the brokers are gone, so it detects most outages too. It is not a substitute
+     * though: it only helps while there is an offset to commit, which stops being true under
+     * enable.auto.commit or for a reader that never commits. This check runs <em>before</em> it
+     * for that reason - when it sat after, commitSync threw first every time and this never
+     * executed during an actual outage. Set myapp.kafka.reachabilityCheckSeconds to 0 to rely on
      * the commit path alone.
      */
     private void verifyReachable() {

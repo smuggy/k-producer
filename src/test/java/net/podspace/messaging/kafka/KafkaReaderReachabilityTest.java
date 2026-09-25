@@ -119,6 +119,28 @@ class KafkaReaderReachabilityTest {
     }
 
     @Test
+    void theCheckRunsEvenWhenCommitSyncWouldThrow() {
+        // The regression this ordering exists for. commitSync also fails during an outage, and
+        // when it ran first it threw before the reachability check could execute - so the check
+        // was dead code in precisely the scenario it was written for.
+        UnreachableAfterAssignment consumer = new UnreachableAfterAssignment() {
+            @Override
+            public synchronized void commitSync(java.time.Duration timeout) {
+                throw new org.apache.kafka.common.errors.TimeoutException("coordinator gone");
+            }
+        };
+        consumer.updateBeginningOffsets(Map.of(PARTITION, 0L));
+        consumer.updateEndOffsets(Map.of(PARTITION, 0L));
+        consumer.reachable = false;
+        KafkaReader reader = new KafkaReader(consumer, TOPIC, new SimpleMeterRegistry(), TINY);
+        consumer.rebalance(List.of(PARTITION));
+
+        Assertions.assertThrows(TimeoutException.class, reader::readMessage);
+        Assertions.assertTrue(consumer.endOffsetCalls > 0,
+                "the reachability check must run before commitSync, or it never runs at all");
+    }
+
+    @Test
     void theCheckIsRateLimitedRatherThanRunOnEveryEmptyPoll() {
         UnreachableAfterAssignment consumer = assignedConsumer();
         KafkaReader reader = new KafkaReader(consumer, TOPIC, new SimpleMeterRegistry(),

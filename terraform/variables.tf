@@ -8,7 +8,7 @@ variable "kafka_bootstrap_servers" {
   default = [
     "kafka-00.podspace.internal:9092",
     "kafka-01.podspace.internal:9092",
-    "kafka-02.podspace.internal:9092",
+    "kafka-02.podspace.internal:9092"
   ]
 }
 

@@ -89,6 +89,16 @@ public class Relay implements EngineStatus {
         return loop.getLastFailure();
     }
 
+    @Override
+    public java.time.Duration getCurrentOutage() {
+        return loop.getCurrentOutage();
+    }
+
+    @Override
+    public void onRecovery(RecoveryObserver observer) {
+        loop.setRecoveryListener(observer::recovered);
+    }
+
     /** Surfaces the forwarded count on /actuator/health, alongside the metric. */
     @Override
     public Map<String, Object> details() {

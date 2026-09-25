@@ -129,6 +129,16 @@ public class Publisher implements PublisherManager, EngineStatus {
         return loop.getLastFailure();
     }
 
+    @Override
+    public java.time.Duration getCurrentOutage() {
+        return loop.getCurrentOutage();
+    }
+
+    @Override
+    public void onRecovery(RecoveryObserver observer) {
+        loop.setRecoveryListener(observer::recovered);
+    }
+
     /** One pass: publish the configured batch, then wait out the configured interval. */
     private void publishBatch() {
         publishOnce();

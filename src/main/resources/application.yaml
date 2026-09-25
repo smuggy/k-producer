@@ -99,6 +99,8 @@ myapp:
     # throws, and the worker loop records no failure. Lower it further to detect faster, raise it
     # if a slow metadata refresh is being mistaken for an outage.
     maxBlockMs: 10000
+    # (Outage timing needs no configuration: kproducer.engine.outage records every recovery, and
+    # kproducer.engine.outage.current reports an outage still in progress. See RecoveryMetrics.)
     # Ceiling on how long an accepted record may go unacknowledged before the send is failed.
     # Kafka defaults to 120000, so a record buffered just before an outage takes two minutes to
     # report. Must be at least linger.ms + request.timeout.ms; with Kafka 4 defaults that is

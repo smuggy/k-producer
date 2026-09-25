@@ -1,5 +1,6 @@
 package net.podspace.pipeline;
 
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -28,6 +29,32 @@ public interface EngineStatus {
 
     /** Description of the most recent failure, or null while healthy. */
     String getLastFailure();
+
+    /**
+     * How long this engine has currently been failing, or zero while healthy. A completed outage
+     * is reported as a timer sample; this is the in-progress one, which would otherwise be
+     * invisible until it ended.
+     */
+    default Duration getCurrentOutage() {
+        return Duration.ZERO;
+    }
+
+    /**
+     * Registers a callback invoked when a run of failures ends, with how long it lasted.
+     *
+     * <p>Exposed here rather than handing out the engine's {@code WorkerLoop}, which is
+     * deliberately package-private: the loop is the pipeline's internal engine, and widening it
+     * just to attach a metric would undo that. Default is a no-op so an engine with no loop - the
+     * idle stand-in below - needs no special case.
+     */
+    default void onRecovery(RecoveryObserver observer) {
+    }
+
+    /** Notified when an engine recovers, with the duration of the outage that just ended. */
+    @FunctionalInterface
+    interface RecoveryObserver {
+        void recovered(String engineName, Duration outage, int consecutiveFailures);
+    }
 
     /**
      * Extra, engine-specific values to include in the health report.
@@ -63,5 +90,6 @@ public interface EngineStatus {
         @Override public boolean isAttached() { return true; }
         @Override public long getTotalFailures() { return 0; }
         @Override public String getLastFailure() { return null; }
+        @Override public Duration getCurrentOutage() { return Duration.ZERO; }
     };
 }

@@ -83,6 +83,16 @@ public class Watcher<T extends Comparable<T>> implements EngineStatus {
         return loop.getLastFailure();
     }
 
+    @Override
+    public java.time.Duration getCurrentOutage() {
+        return loop.getCurrentOutage();
+    }
+
+    @Override
+    public void onRecovery(RecoveryObserver observer) {
+        loop.setRecoveryListener(observer::recovered);
+    }
+
     /** One pass: read whatever is available and record a latency sample for each parsed message. */
     private void pollAndRecord() {
         List<String> list = reader.readMessage();
