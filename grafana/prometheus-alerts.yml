@@ -1,0 +1,132 @@
+# Alerting rules for the k-producer probe.
+#
+# Load from prometheus.yml:
+#   rule_files:
+#     - /etc/prometheus/k-producer-alerts.yml
+# then reload:  curl -X POST http://prometheus.podspace.internal:9090/-/reload
+# Check they parsed:  curl -s .../api/v1/rules | grep k-producer
+#
+# The dashboard's colour thresholds are not alerts - they tint a number on a screen nobody is
+# watching at 3am. These fire whether or not anyone has the dashboard open.
+#
+# Severity convention used below:
+#   critical - messages were lost, or the probe is blind. Someone should look now.
+#   warning  - the pipeline is degraded or a measurement is untrustworthy.
+
+groups:
+  - name: k-producer-delivery
+    interval: 30s
+    rules:
+
+      # The headline figure. missing means the cluster was handed a message and did not deliver
+      # it - as distinct from unsent below, where it was never handed over at all.
+      - alert: KProducerMessageLoss
+        expr: increase(kproducer_delivery_missing_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "k-producer lost {{ $value | printf \"%.0f\" }} message(s) on {{ $labels.probe_instance }}"
+          description: >-
+            Messages were published and acknowledged but never came back. This is real loss, not
+            reordering or a producer fault. Check broker health and the topic's replication
+            settings; compare against kproducer_delivery_unsent_total, which would be non-zero if
+            the producer were at fault instead.
+
+      # Fires the moment the producer cannot hand messages over - brokers unreachable, or an ISR
+      # too small to satisfy min.insync.replicas. Measured during a two-broker outage: 1150
+      # messages, and nothing anywhere reported it.
+      - alert: KProducerCannotDeliver
+        expr: increase(kproducer_delivery_unsent_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "k-producer cannot deliver to the cluster from {{ $labels.probe_instance }}"
+          description: >-
+            {{ $value | printf "%.0f" }} sends failed before reaching the cluster in the last 5m.
+            The cluster has NOT lost these - it was never given them. Usual causes: brokers
+            unreachable, or in-sync replicas below min.insync.replicas so writes are refused.
+
+      # An absence, not a value - which is why a threshold on the counter can never catch it. This
+      # is the case that went unnoticed: the probe was healthy, scraped, and publishing nothing.
+      - alert: KProducerNotPublishing
+        # role!="echo" is load-bearing, not tidiness: an echo instance relays and never publishes,
+        # so without it this fires permanently on every relay in the fleet. An alert that is always
+        # firing trains people to ignore the whole channel - verified against the live cluster,
+        # where the only match for the unfiltered expression was probe_instance="kafka-00-echo".
+        expr: rate(kproducer_delivery_produced_total{role!="echo"}[5m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "k-producer on {{ $labels.probe_instance }} has produced nothing for 10m"
+          description: >-
+            The probe is up and being scraped but is not generating messages, so every other
+            measurement here is stale. Either the publisher was stopped (/publisher/start resumes
+            it), or the publisher was never started on this instance at all. Echo instances are
+            excluded by the role filter, since relaying without publishing is correct for them.
+
+      # A probe that is not scraped tells you nothing, and its silence looks identical to a
+      # perfectly healthy quiet period.
+      - alert: KProducerDown
+        expr: up{job="k-producer"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "k-producer target {{ $labels.instance }} is not responding"
+          description: >-
+            Prometheus cannot scrape the probe. While this is firing there is no delivery or
+            latency data at all, so the absence of other alerts means nothing.
+
+  - name: k-producer-pipeline
+    interval: 30s
+    rules:
+
+      # The completed-outage timer emits nothing while an outage is still running, so without this
+      # a permanent failure is indistinguishable from perfect health.
+      - alert: KProducerEngineOutage
+        expr: kproducer_engine_outage_current_seconds > 60
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "k-producer {{ $labels.engine }} has been failing for {{ $value | printf \"%.0f\" }}s"
+          description: >-
+            The {{ $labels.engine }} loop on {{ $labels.probe_instance }} has been retrying without
+            success. It keeps running deliberately - the tool is expected to survive the outages it
+            measures - but nothing is flowing through this engine.
+
+      - alert: KProducerConsumerDetached
+        expr: kafka_consumer_coordinator_assigned_partitions == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "k-producer consumer on {{ $labels.probe_instance }} holds no partitions"
+          description: >-
+            With no assignment nothing can be consumed, so latency and delivery figures stop
+            updating while the probe still reports itself alive. Note this can read stale during a
+            total broker outage: a client that has lost every broker never learns it lost its
+            partitions.
+
+      # Duplicates are not loss, but at-least-once redelivery distorts latency percentiles and
+      # usually means a consumer group is rebalancing repeatedly.
+      - alert: KProducerDuplicateDeliveries
+        expr: increase(kproducer_delivery_duplicates_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "k-producer saw {{ $value | printf \"%.0f\" }} duplicate deliveries"
+          description: >-
+            The same sequence arrived more than once. Expected after a rebalance replays
+            uncommitted offsets; sustained duplicates point at a consumer group that cannot hold
+            its assignment.
+
+      # Deliberately NOT alerting on kproducer_delivery_outoforder_total: on a multi-partition
+      # topic roughly half of all messages arrive out of order as a matter of course, because Kafka
+      # orders within a partition only. It is meaningful solely when the publisher runs with
+      # myapp.publisher.keyCount=1, and the app does not export keyCount, so a rule here cannot
+      # tell the two cases apart. It would page on normal operation.

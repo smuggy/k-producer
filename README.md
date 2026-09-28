@@ -15,7 +15,7 @@ Done:
 * containerised, multi-architecture
 * end-to-end latency as a Prometheus histogram
 * delivery reconciliation — sent vs received, with loss, duplicates and reordering
-* round-trip measurement across hosts via the origin/echo roles, needing no clock synchronisation
+* round-trip measurement across hosts via the origin/echo roles, needing no clock synchronization
 * partition keys, for deliberate placement across partitions
 * verification mode with a pass/fail exit code, for use as a build step
 * liveness/readiness health contributors per pipeline engine
@@ -32,7 +32,7 @@ Not done:
 
   Worth doing because it widens what the tool measures: serialization cost as a share of end-to-end
   latency, the registry as an availability dependency alongside the brokers, and schema-evolution
-  behaviour on a live topic. It would also make the probe representative of clusters where Avro is
+  behavior on a live topic. It would also make the probe representative of clusters where Avro is
   the norm rather than the exception.
 
   Three constraints any implementation has to respect, all of them load-bearing:
@@ -81,14 +81,14 @@ latency being measured. `myapp.role` decides how that constraint is satisfied.
 | `origin`             | `topicName`     | `echoTopicName` | **round trip**, timed entirely on its own clock |
 | `echo`               | `echoTopicName` | `topicName`     | nothing — it is a relay                         |
 
-**`loopback`** is the original behaviour: one process both publishes and consumes, so the two
+**`loopback`** is the original behavior: one process both publishes and consumes, so the two
 timestamps share a clock. Valid only as a single instance — scaling out does not fail, it quietly
 reports skew as latency. A warning is logged at startup if service discovery sees more than one
 instance.
 
 **`origin` + `echo`** is how to measure across zones or hosts. The origin publishes to one topic
 and listens on the other; the echo instance relays between them. Because the origin stamps the
-message and later reads its own stamp back, **no clock synchronisation is required** — the result
+message and later reads its own stamp back, **no clock synchronization is required** — the result
 is a genuine round trip, unaffected by skew between the two machines.
 
 ```
@@ -322,13 +322,13 @@ tofu init
 tofu apply -target=kafka_topic.probe        # topics only, leaving Consul KV alone
 ```
 
-| Variable | Default | Notes |
-|----------|---------|-------|
-| `kafka_bootstrap_servers` | the three `*.podspace.internal` brokers | must be reachable from wherever Terraform runs |
-| `topic_partitions` | `3` | more than one is what makes partition behaviour observable |
-| `topic_replication_factor` | `3` | at `1` a broker-failure test measures data loss, not failover |
-| `topic_min_insync_replicas` | `2` | writes rejected below this, with `acks=all` |
-| `topic_retention_ms` | `21600000` (6h) | a probe's output has no value beyond the run |
+| Variable                    | Default                                 | Notes                                                         |
+|-----------------------------|-----------------------------------------|---------------------------------------------------------------|
+| `kafka_bootstrap_servers`   | the three `*.podspace.internal` brokers | must be reachable from wherever Terraform runs                |
+| `topic_partitions`          | `3`                                     | more than one is what makes partition behaviour observable    |
+| `topic_replication_factor`  | `3`                                     | at `1` a broker-failure test measures data loss, not failover |
+| `topic_min_insync_replicas` | `2`                                     | writes rejected below this, with `acks=all`                   |
+| `topic_retention_ms`        | `21600000` (6h)                         | a probe's output has no value beyond the run                  |
 
 **Run it from inside the VPC.** The Kafka provider connects to the brokers directly rather than
 through an API, and they advertise internal-only names — the same constraint that forces the probe

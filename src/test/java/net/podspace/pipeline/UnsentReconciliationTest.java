@@ -2,6 +2,7 @@ package net.podspace.pipeline;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import net.podspace.messaging.MessageGenerator;
+import net.podspace.messaging.MessageWriter;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -100,6 +101,78 @@ class UnsentReconciliationTest {
     }
 
     // --- through the publisher, which is where the correlation has to hold -------------------
+
+    @Test
+    void anAsynchronousSendFailureAlsoRetiresItsSequence() {
+        // The case a synchronous-only fix misses, and the one that actually happens in production:
+        // brokers reachable but unable to satisfy min.insync.replicas. The record buffers fine, so
+        // writeMessage returns normally, and the rejection arrives later. Measured against a real
+        // cluster with 2 of 3 brokers down, this produced 4510 messages reported as LOST with
+        // unsent stuck at 0 - the ledger blaming the cluster for messages it had explicitly refused.
+        DeliveryLedger ledger = new DeliveryLedger(new SimpleMeterRegistry());
+        AtomicInteger accepted = new AtomicInteger();
+
+        // Accepts every write, then fails it - exactly what KafkaWriter does via whenComplete.
+        MessageWriter acceptsThenFails = new MessageWriter() {
+            @Override public void writeMessage(byte[] message) { }
+            @Override public void writeMessage(String key, byte[] message, Runnable onAsyncFailure) {
+                accepted.incrementAndGet();
+                onAsyncFailure.run();
+            }
+        };
+
+        Publisher publisher = new Publisher(new Gen(ledger), acceptsThenFails, ledger);
+        publisher.setMessages(4);
+        publisher.publishOnce();
+
+        DeliveryLedger.Snapshot s = ledger.snapshot();
+        Assertions.assertEquals(4, accepted.get(), "the writer accepted every message");
+        Assertions.assertEquals(4, s.produced());
+        Assertions.assertEquals(4, s.unsent(), "an async rejection must retire the sequence");
+        Assertions.assertEquals(0, s.offered(), "the cluster kept none of them");
+        Assertions.assertEquals(0, s.pending(), "nothing may be left in flight");
+
+        ledger.finalizeOutstanding();
+        Assertions.assertEquals(0, ledger.snapshot().missing(),
+                "a cluster that refused the writes did not lose them");
+    }
+
+    @Test
+    void aSuccessfulAsyncSendLeavesTheSequenceInFlight() {
+        // The mirror image: the callback must not fire on success, or every delivered message
+        // would be retired as unsent and reconciliation would under-count what the cluster took.
+        DeliveryLedger ledger = new DeliveryLedger(new SimpleMeterRegistry());
+        MessageWriter accepts = new MessageWriter() {
+            @Override public void writeMessage(byte[] message) { }
+            @Override public void writeMessage(String key, byte[] message, Runnable onAsyncFailure) {
+                // no failure reported
+            }
+        };
+        Publisher publisher = new Publisher(new Gen(ledger), accepts, ledger);
+        publisher.setMessages(3);
+        publisher.publishOnce();
+
+        DeliveryLedger.Snapshot s = ledger.snapshot();
+        Assertions.assertEquals(0, s.unsent());
+        Assertions.assertEquals(3, s.offered(), "the cluster was given all three");
+        Assertions.assertEquals(3, s.pending(), "still in flight until they come back");
+    }
+
+    @Test
+    void aTransportWithNoAsyncPhaseIsUnaffected() {
+        // The queue and no-op writers do not override the callback overload; the default must
+        // simply write, not silently retire everything as unsent.
+        DeliveryLedger ledger = new DeliveryLedger(new SimpleMeterRegistry());
+        AtomicInteger written = new AtomicInteger();
+        Publisher publisher = new Publisher(new Gen(ledger),
+                m -> written.incrementAndGet(), ledger);
+        publisher.setMessages(3);
+        publisher.publishOnce();
+
+        Assertions.assertEquals(3, written.get());
+        Assertions.assertEquals(0, ledger.snapshot().unsent(),
+                "a plain writer reports no async failure, so nothing is retired");
+    }
 
     @Test
     void thePublisherRetiresTheSequenceOfTheMessageThatFailed() {

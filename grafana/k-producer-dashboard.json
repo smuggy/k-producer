@@ -287,7 +287,7 @@
       "type": "stat",
       "title": "Out of order",
       "id": 5,
-      "description": "Arrived below the high-water sequence. Expected with multiple partitions; unexpected on a single-partition topic.",
+      "description": "Messages that arrived below the high-water sequence.\n\n**This is normally NOT a fault.** Kafka orders within a partition only, so traffic spread across partitions reorders as a matter of course - a multi-partition topic routinely shows around half of all messages here, and that figure describes the topic layout rather than the cluster's health.\n\nIt becomes a real signal when the publisher runs with `myapp.publisher.keyCount=1`: every message then hashes to one partition, Kafka's ordering guarantee covers the whole run, and anything reported here is a genuine fault - a retry storm, or max.in.flight.requests above 1 without idempotence. Measured on this cluster: keyCount=3 gave 16314 of 32390, keyCount=1 gave 0.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -606,7 +606,7 @@
       "type": "timeseries",
       "title": "Delivery anomalies",
       "id": 9,
-      "description": "'late' means it arrived after being written off as missing \u2014 the window was too small, or recovery took longer than the window.",
+      "description": "'late' means it arrived after being written off as missing \u2014 the window was too small, or recovery took longer than the window.\n\nNote 'out of order' is expected on a multi-partition topic and says nothing about cluster health unless the publisher uses keyCount=1 - see the Out of order stat. 'missing' and 'duplicates' are the lines that always matter.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"

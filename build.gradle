@@ -7,7 +7,7 @@ plugins {
 }
 
 group = 'net.podspace'
-version = '0.5.6'
+version = '0.5.7'
 
 // Pin the bytecode/API level to the JRE in the Docker image, whatever JDK runs Gradle. Without
 // this the class file version silently tracks the local JDK - a JDK 26 build produced major
@@ -69,23 +69,40 @@ tasks.register("prepareDockerDir", Copy) {
 def dockerExe = providers.gradleProperty("dockerExecutable").getOrElse("docker")
 
 /**
- * The Gradle daemon captures PATH when it starts and is then reused for hours, so a daemon
+ * Resolves the docker executable to an ABSOLUTE path, failing with an explanation if it cannot.
+ *
+ * <p>The Gradle daemon captures PATH when it starts and is then reused for hours, so a daemon
  * launched from an environment without docker on its PATH keeps failing even once your shell can
  * find it. On macOS this bites when the daemon was started by an IDE opened from Finder or the
  * Dock, which does not inherit the shell PATH. Gradle's own error for this is just
- * "A problem occurred starting process", which points nowhere, hence the explicit check.
+ * "A problem occurred starting process", which points nowhere - hence this check.
+ *
+ * <p>It returns the resolved path rather than just validating, and the tasks below run exactly
+ * what it returns. That matters: the previous version only checked, via a shell, while the tasks
+ * spawned the bare name themselves. The two disagreed - the shell found docker, the task then
+ * failed to start it - so the guard passed and the caller got the same opaque Gradle error it
+ * exists to replace. Resolving once and reusing the answer makes that disagreement impossible.
  */
 def requireDocker = {
+    // An absolute path needs no lookup and is what we were asked to use.
+    if (dockerExe.startsWith("/")) {
+        if (!new File(dockerExe).canExecute()) {
+            throw new GradleException("Docker executable '${dockerExe}' is not executable.")
+        }
+        return dockerExe
+    }
     def probe = providers.exec {
         commandLine "/usr/bin/env", "sh", "-c", "command -v '${dockerExe}'"
         ignoreExitValue = true
     }
-    if (probe.result.get().exitValue != 0) {
+    def resolved = probe.standardOutput.asText.get().trim()
+    if (probe.result.get().exitValue != 0 || resolved.isEmpty()) {
         throw new GradleException("Docker executable '${dockerExe}' was not found on the Gradle "
                 + "daemon's PATH.\n"
                 + "  - The daemon caches PATH from whatever started it: try './gradlew --stop' and re-run.\n"
                 + "  - Or point at it directly: -PdockerExecutable=/full/path/to/docker")
     }
+    return resolved
 }
 
 // Override with -PdockerPlatforms=linux/amd64 to publish a single architecture.
@@ -96,37 +113,39 @@ def dockerPlatforms = providers.gradleProperty("dockerPlatforms").getOrElse("lin
  * docker-container builder. Checking up front turns an obscure mid-build failure into an
  * instruction.
  */
-def requireMultiArchBuilder = {
+def requireMultiArchBuilder = { String docker ->
     def probe = providers.exec {
-        commandLine dockerExe, "buildx", "inspect"
+        commandLine docker, "buildx", "inspect"
         ignoreExitValue = true
     }
     if (probe.result.get().exitValue != 0) {
-        throw new GradleException("'${dockerExe} buildx' is not usable. Buildx ships with Docker "
+        throw new GradleException("'${docker} buildx' is not usable. Buildx ships with Docker "
                 + "Desktop; on Linux it may need installing separately.")
     }
     if (probe.standardOutput.asText.get() =~ /(?m)^Driver:\s+docker\s*$/) {
         throw new GradleException("The active buildx builder uses the default 'docker' driver, "
                 + "which cannot build multi-platform images.\n"
-                + "  Create one that can:  ${dockerExe} buildx create --name multiarch --use --bootstrap")
+                + "  Create one that can:  ${docker} buildx create --name multiarch --use --bootstrap")
     }
 }
 
 tasks.register("buildDockerImage", Exec) {
     workingDir layout.getBuildDirectory()
-    commandLine dockerExe, "build", "--tag", "${project.name}:${project.version}", "docker"
-    doFirst { requireDocker() }
+    args "build", "--tag", "${project.name}:${project.version}", "docker"
+    // executable is set from the guard's own answer, so the binary that was checked is the binary
+    // that runs. Deferred to doFirst so a plain `./gradlew build` does not pay for the lookup.
+    doFirst { executable requireDocker() }
 }
 
 tasks.register("tagDockerImage", Exec) {
     workingDir layout.getBuildDirectory()
-    commandLine dockerExe, "image", "tag", "${project.name}:${project.version}", "mmckernan/${project.name}:${project.version}"
-    doFirst { requireDocker() }
+    args "image", "tag", "${project.name}:${project.version}", "mmckernan/${project.name}:${project.version}"
+    doFirst { executable requireDocker() }
 }
 
 tasks.register("pushDockerImage", Exec) {
-    commandLine dockerExe, "push", "mmckernan/${project.name}:${project.version}"
-    doFirst { requireDocker() }
+    args "push", "mmckernan/${project.name}:${project.version}"
+    doFirst { executable requireDocker() }
 }
 
 /**
@@ -145,13 +164,14 @@ tasks.register("pushDockerImage", Exec) {
  */
 tasks.register("pushMultiArchImage", Exec) {
     workingDir layout.getBuildDirectory()
-    commandLine dockerExe, "buildx", "build",
+    args "buildx", "build",
             "--platform", dockerPlatforms,
             "--tag", "mmckernan/${project.name}:${project.version}",
             "--push", "docker"
     doFirst {
-        requireDocker()
-        requireMultiArchBuilder()
+        def docker = requireDocker()
+        executable docker
+        requireMultiArchBuilder(docker)
         logger.lifecycle("Publishing mmckernan/${project.name}:${project.version} for ${dockerPlatforms}")
     }
 }

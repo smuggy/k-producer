@@ -158,7 +158,13 @@ public class Publisher implements PublisherManager, EngineStatus {
         for (long i = 0; i < batch; i++) {
             MessageGenerator.Generated message = generator.createMessage();
             try {
-                writer.writeMessage(message.key(), message.payload());
+                // The callback covers the asynchronous half: a send that buffers successfully and
+                // is rejected later - min.insync.replicas unsatisfied, say - never throws here, so
+                // without it the sequence would sit in flight until the window aged it into a
+                // false loss. The catch below covers the synchronous half, where the client cannot
+                // even buffer and max.block.ms expires.
+                writer.writeMessage(message.key(), message.payload(),
+                        () -> ledger.sendFailed(message.sequence()));
             } catch (RuntimeException e) {
                 // The sequence was issued when the message was created. A send that never left
                 // this process cannot arrive, so it has to be retired rather than left to age out

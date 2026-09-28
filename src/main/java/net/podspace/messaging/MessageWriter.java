@@ -27,4 +27,23 @@ public interface MessageWriter {
     default void writeMessage(String key, byte[] message) {
         writeMessage(message);
     }
+
+    /**
+     * Writes, and reports a failure that only becomes known after the call returns.
+     *
+     * <p>A Kafka send is two-phase: it buffers and returns, then succeeds or fails later. Only the
+     * first phase can throw to the caller. When brokers are reachable but cannot satisfy
+     * {@code min.insync.replicas}, the record buffers fine and the rejection arrives
+     * asynchronously - so a caller that only catches exceptions sees every send as successful.
+     *
+     * <p>{@code onAsyncFailure} closes the gap. The writer cannot do this itself: retiring a
+     * message needs its delivery sequence, which the writer never sees. The publisher supplies a
+     * callback carrying the sequence it already holds.
+     *
+     * <p>Default ignores it, which is correct for transports with no asynchronous phase - the
+     * in-memory queue and the no-op writers either succeed or throw, with nothing to report later.
+     */
+    default void writeMessage(String key, byte[] message, Runnable onAsyncFailure) {
+        writeMessage(key, message);
+    }
 }

@@ -42,6 +42,48 @@ service).
 | Failure and recovery | What happened during a broker outage, and how long until baseline? |
 | Echo relay | Is the return leg forwarding (echo role), and is the probe itself stable? |
 
+## Alerting
+
+The dashboard's coloured thresholds are **not alerts** — they tint a number on a screen nobody is
+watching. `prometheus-alerts.yml` holds actual rules, routed through the Alertmanager already
+running alongside Prometheus:
+
+```yaml
+# prometheus.yml
+rule_files:
+  - /etc/prometheus/k-producer-alerts.yml
+```
+
+```shell
+curl -X POST http://prometheus.podspace.internal:9090/-/reload
+curl -s http://prometheus.podspace.internal:9090/api/v1/rules | grep k-producer
+```
+
+| Alert | Fires when | Severity |
+|-------|-----------|----------|
+| `KProducerMessageLoss` | `missing` increases — the cluster took messages and lost them | critical |
+| `KProducerCannotDeliver` | `unsent` increases — the producer cannot hand messages over at all | critical |
+| `KProducerNotPublishing` | no messages produced for 10m, excluding echo instances | warning |
+| `KProducerDown` | the scrape target is unreachable | critical |
+| `KProducerEngineOutage` | an engine has been failing for over a minute | warning |
+| `KProducerConsumerDetached` | the consumer holds no partitions for 5m | warning |
+| `KProducerDuplicateDeliveries` | the same sequence arrived twice | warning |
+
+**`KProducerNotPublishing` is the one that catches a silent probe.** A stopped publisher looks
+identical to a healthy idle one on every other panel — the process is up, it is being scraped, and
+every counter simply stops moving. That is an absence rather than a value, so no threshold on a
+counter can detect it.
+
+It excludes `role="echo"` deliberately. An echo instance relays and never publishes, so without the
+filter it fires permanently on every relay — verified against the live cluster, where the only
+match for the unfiltered expression was `probe_instance="kafka-00-echo"`. An always-firing alert
+trains people to ignore the channel.
+
+**Nothing alerts on `out of order`**, for the reason given below: on a multi-partition topic
+roughly half of all messages arrive out of order as a matter of course. The app does not export
+`keyCount`, so a rule could not tell a real ordering fault from normal operation, and would page
+constantly.
+
 ## Reading the delivery row
 
 **Compare received against *offered*, not *produced*.** A sequence is issued when a message is
@@ -57,8 +99,13 @@ That makes two failures distinguishable at a glance:
   configuration problem, and the run proved nothing about the cluster either way.
 
 **Out of order** is expected whenever traffic spans partitions, because Kafka orders only within
-one. It becomes a real signal when the publisher runs with `myapp.publisher.keyCount=1`, which
-pins every message to a single partition.
+one — a three-partition topic routinely reports around half of all messages here. That figure
+describes the topic layout, not the cluster's health, and should not be read alongside `missing`
+and `duplicates` as though it were comparable.
+
+It becomes a real signal only with `myapp.publisher.keyCount=1`, which pins every message to one
+partition so Kafka's ordering guarantee covers the whole run. Measured on this cluster:
+`keyCount=3` gave 16314 of 32390 out of order; `keyCount=1` gave 0.
 
 ## Two things to know before trusting a panel
 
