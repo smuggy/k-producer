@@ -3,7 +3,7 @@ kind: Kustomization
 namespace: app-ns
 # Every manifest belongs here. Only deployment.yaml carries an inline `namespace:`; the rest
 # rely on the `namespace` above, so applying them with `kubectl apply -f` puts them in whatever
-# namespace happens to be current. Use `kubectl apply -k deploy/`.
+# namespace happens to be current. Use `kubectl apply --kustomize deploy/`.
 resources:
   - deployment.yaml
   - service.yaml
@@ -22,4 +22,4 @@ configMapGenerator:
       - application.yaml=config/application.yaml
   - name: consul-ca
     files:
-      - internal-ca.pem=../../vpcs/secrets/internal_ca_cert.pem
+      - internal-ca.pem=config/internal_ca_cert.pem

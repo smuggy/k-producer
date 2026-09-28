@@ -100,7 +100,7 @@ while [ $# -gt 0 ]; do
         --tag)       TAG=$2; shift 2 ;;
         --start)     AUTOSTART=1; shift ;;
         --foreground) DETACH=0; shift ;;
-        -h|--help)   usage; exit 0 ;;
+        --help)      usage; exit 0 ;;
         *)           die "unknown argument: $1 (try --help)" ;;
     esac
 done
@@ -110,11 +110,11 @@ TAG=${TAG:-$(version_from_gradle)}
 ACTION=${ACTION:-run}
 
 case "$ACTION" in
-    stop)   docker rm -f "$NAME" >/dev/null 2>&1 && echo "removed $NAME" || echo "$NAME not running"; exit 0 ;;
-    logs)   exec docker logs -f "$NAME" ;;
+    stop)   docker rm --force "$NAME" >/dev/null 2>&1 && echo "removed $NAME" || echo "$NAME not running"; exit 0 ;;
+    logs)   exec docker logs --follow "$NAME" ;;
     status)
         docker ps --filter "name=^${NAME}$" --format '  {{.Names}}  {{.Status}}  {{.Ports}}'
-        curl -s --max-time 5 "http://localhost:${PORT}/actuator/health" | head -c 200; echo
+        curl --silent --max-time 5 "http://localhost:${PORT}/actuator/health" | head -c 200; echo
         exit 0 ;;
 esac
 
@@ -153,16 +153,16 @@ docker image inspect "${IMAGE}:${TAG}" >/dev/null 2>&1 || {
 # Verification exits on its own with a meaningful status, so it must run in the foreground and
 # without a TTY - the exit code is the entire output anyone cares about.
 [ -z "$VERIFY" ] || DETACH=0
-args=(--name "$NAME" -p "${PORT}:8080")
+args=(--name "$NAME" --publish "${PORT}:8080")
 if [ "$DETACH" = "1" ]; then
-    args+=(-d)
+    args+=(--detach)
 elif [ -n "$VERIFY" ]; then
     args+=(--rm)
 else
-    args+=(--rm -it)
+    args+=(--rm --interactive --tty)
 fi
 
-env_add() { [ -n "$2" ] && args+=(-e "$1=$2") || true; }
+env_add() { [ -n "$2" ] && args+=(--env "$1=$2") || true; }
 env_add MYAPP_MESSENGER               "$MESSENGER"
 env_add MYAPP_KAFKA_BOOTSTRAPADDRESS  "$BROKER"
 env_add MYAPP_KAFKA_TOPICNAME         "$TOPIC"
@@ -181,11 +181,11 @@ env_add SPRING_PROFILES_ACTIVE        "$PROFILE"
 
 if [ -n "$CA_FILE" ]; then
     [ -f "$CA_FILE" ] || die "CA file not found: $CA_FILE"
-    args+=(-v "$(cd "$(dirname "$CA_FILE")" && pwd)/$(basename "$CA_FILE")":/etc/ssl/consul-ca/ca.pem:ro)
+    args+=(--volume "$(cd "$(dirname "$CA_FILE")" && pwd)/$(basename "$CA_FILE")":/etc/ssl/consul-ca/ca.pem:ro)
 fi
 if [ -n "$CONFIG_FILE" ]; then
     [ -f "$CONFIG_FILE" ] || die "config file not found: $CONFIG_FILE"
-    args+=(-v "$(cd "$(dirname "$CONFIG_FILE")" && pwd)/$(basename "$CONFIG_FILE")":/config/application.yaml:ro)
+    args+=(--volume "$(cd "$(dirname "$CONFIG_FILE")" && pwd)/$(basename "$CONFIG_FILE")":/config/application.yaml:ro)
 fi
 
 if [ -n "$PROFILE" ] && [ -z "$CA_FILE" ]; then
@@ -193,7 +193,7 @@ if [ -n "$PROFILE" ] && [ -z "$CA_FILE" ]; then
     echo "      Without --ca the TLS handshake fails; the app still starts, on bundled defaults."
 fi
 
-docker rm -f "$NAME" >/dev/null 2>&1 || true
+docker rm --force "$NAME" >/dev/null 2>&1 || true
 if [ -n "$VERIFY" ]; then
     # exec so the container's exit status becomes this script's, unmodified.
     exec docker run "${args[@]}" "${IMAGE}:${TAG}"
@@ -204,7 +204,7 @@ docker run "${args[@]}" "${IMAGE}:${TAG}"
 
 printf 'waiting for %s to become healthy' "$NAME"
 for _ in $(seq 1 40); do
-    if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://localhost:${PORT}/actuator/health/liveness" 2>/dev/null)" = "200" ]; then
+    if [ "$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 2 "http://localhost:${PORT}/actuator/health/liveness" 2>/dev/null)" = "200" ]; then
         echo " ok"
         break
     fi
@@ -212,8 +212,8 @@ for _ in $(seq 1 40); do
 done
 
 if [ "$AUTOSTART" = "1" ]; then
-    curl -s -o /dev/null --max-time 5 "http://localhost:${PORT}/consumer/start"
-    curl -s -o /dev/null --max-time 5 "http://localhost:${PORT}/publisher/start"
+    curl --silent --output /dev/null --max-time 5 "http://localhost:${PORT}/consumer/start"
+    curl --silent --output /dev/null --max-time 5 "http://localhost:${PORT}/publisher/start"
     echo "publisher and consumer started"
 fi
 

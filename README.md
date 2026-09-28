@@ -310,6 +310,33 @@ value actually took effect rather than merely being present — for example the 
 `kproducer_producer_acknowledged_total`.
 
 ---
+## Deploying to Kubernetes
+
+```shell
+./deploy/apply.sh              # apply
+./deploy/apply.sh --dry-run    # validate against the cluster, changing nothing
+./deploy/apply.sh --render     # print the manifests, no cluster needed
+```
+
+**Use the script rather than `kubectl apply --kustomize deploy/` directly.** `deploy/config/internal_ca_cert.pem`
+is a symlink to the CA that Terraform manages, so there is one source of truth instead of a copy
+that quietly goes stale. Kustomize resolves symlinks and refuses targets outside its own directory,
+so the plain command fails — and it fails confusingly, naming a path that is visibly *inside*
+`deploy/` while insisting it is not. The script wraps `--load-restrictor LoadRestrictionsNone` so
+nobody has to know that.
+
+Both ConfigMaps are generated with a content hash in the name:
+
+```
+consul-ca-bgt8t7g9d4
+k-producer-config-972d847hb4
+```
+
+That is what makes a CA rotation or a configuration edit actually take effect. The application reads
+its configuration once at start-up, so a fixed-name ConfigMap would sit unread until someone
+remembered to restart the pods; a changed hash rewrites the deployment's volume reference and rolls
+them automatically.
+
 ## Provisioning topics with Terraform
 
 `terraform/topics.tf` creates every topic the application is configured to use. The names live once

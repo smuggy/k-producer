@@ -56,7 +56,7 @@ while [ $# -gt 0 ]; do
         --check)    ACTION=check; shift ;;
         --dry-run)  ACTION=dryrun; shift ;;
         --list)     ACTION=list; shift ;;
-        -h|--help)  usage; exit 0 ;;
+        --help)  usage; exit 0 ;;
         *)          die "unknown argument: $1 (try --help)" ;;
     esac
 done
@@ -79,7 +79,7 @@ print(json.dumps({'schema': open(sys.argv[1]).read(), 'schemaType': 'AVRO'}))
 }
 
 reachable() {
-    curl -sf --max-time 10 "$REGISTRY/subjects" >/dev/null 2>&1 \
+    curl --silent --fail --max-time 10 "$REGISTRY/subjects" >/dev/null 2>&1 \
         || die "cannot reach the registry at $REGISTRY
   It listens inside the VPC only, so this needs to run from a host that can see it -
   the same constraint that applies to the brokers themselves."
@@ -95,13 +95,13 @@ case "$ACTION" in
         exit 0 ;;
     list)
         reachable
-        subjects=$(curl -sf --max-time 10 "$REGISTRY/subjects" | python3 -c "
+        subjects=$(curl --silent --fail --max-time 10 "$REGISTRY/subjects" | python3 -c "
 import json,sys
 s=json.load(sys.stdin)
 print(' '.join(s) if s else '')")
         [ -n "$subjects" ] || { echo "no subjects registered"; exit 0; }
         for s in $subjects; do
-            vers=$(curl -sf --max-time 10 "$REGISTRY/subjects/$s/versions" | tr -d '[]')
+            vers=$(curl --silent --fail --max-time 10 "$REGISTRY/subjects/$s/versions" | tr -d '[]')
             printf '  %-32s versions: %s\n' "$s" "$vers"
         done
         exit 0 ;;
@@ -117,11 +117,11 @@ for topic in "${TOPICS[@]}"; do
     # Compatibility is checked first and separately. Registering an incompatible schema is
     # rejected anyway, but the check reports *why* before anything changes, and it is the only
     # way to ask the question without side effects.
-    existing=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+    existing=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 10 \
         "$REGISTRY/subjects/$subject/versions/latest")
     if [ "$existing" = "200" ]; then
-        verdict=$(curl -s --max-time 10 -X POST \
-            -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+        verdict=$(curl --silent --max-time 10 --request POST \
+            --header "Content-Type: application/vnd.schemaregistry.v1+json" \
             --data "$BODY" \
             "$REGISTRY/compatibility/subjects/$subject/versions/latest" \
             | python3 -c "import json,sys; print(json.load(sys.stdin).get('is_compatible','?'))" 2>/dev/null || echo '?')
@@ -140,8 +140,8 @@ for topic in "${TOPICS[@]}"; do
         continue
     fi
 
-    id=$(curl -s --max-time 15 -X POST \
-        -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+    id=$(curl --silent --max-time 15 --request POST \
+        --header "Content-Type: application/vnd.schemaregistry.v1+json" \
         --data "$BODY" "$REGISTRY/subjects/$subject/versions" \
         | python3 -c "
 import json,sys
