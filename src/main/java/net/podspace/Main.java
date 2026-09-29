@@ -27,10 +27,13 @@ public class Main {
             // chatter wrapped around the one line that matters:
             //   - the Spring banner is not logging at all, it is printed directly
             //   - log4j2's StatusLogger reports its own configuration lifecycle
-            //   - ... including a warning about two JsonLayout.json resources on the classpath
             System.setProperty("spring.main.banner-mode", "off");
+            // log4j2.xml reads this for its Configuration status attribute. The generic
+            // log4j2.StatusLogger.level below is NOT sufficient on its own: an explicit status
+            // attribute in the configuration file overrides it, which is why the status lines
+            // survived until this was added.
+            System.setProperty("log4j2.statusLevel", "OFF");
             System.setProperty("log4j2.StatusLogger.level", "OFF");
-            System.setProperty("log4j2.status.entries", "0");
         }
         SpringApplication.run(Main.class, args);
     }
