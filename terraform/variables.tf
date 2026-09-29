@@ -1,14 +1,18 @@
 variable "kafka_bootstrap_servers" {
   description = <<-EOT
-    Brokers the Kafka provider connects to when managing topics. These must be reachable from
-    wherever Terraform runs - the provider talks to the brokers directly, and they advertise
-    internal-only names, so this generally means running from inside the VPC.
+    Brokers the Kafka provider connects to when managing topics.
+
+    Port 9094 is the external listener, and it advertises the public podspace.net names. That
+    distinction matters more than it looks: a bootstrap address is only used to ask the cluster who
+    its brokers are, and every call after that goes to whatever names come back. The 9092 listener
+    advertises *.podspace.internal, which resolves inside the VPC only - so bootstrapping against
+    9092 from outside connects, then fails on every subsequent request with an unresolvable host.
   EOT
   type        = list(string)
   default = [
-    "kafka-00.podspace.internal:9092",
-    "kafka-01.podspace.internal:9092",
-    "kafka-02.podspace.internal:9092"
+    "kafka-00.podspace.net:9094",
+    "kafka-01.podspace.net:9094",
+    "kafka-02.podspace.net:9094"
   ]
 }
 

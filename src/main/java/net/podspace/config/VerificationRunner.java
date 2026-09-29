@@ -50,11 +50,13 @@ public class VerificationRunner implements ApplicationRunner {
     private final Duration publishTimeout;
     private final Duration drainTimeout;
     private final Duration attachTimeout;
+    /** When set, the summary is one machine-readable line on stdout and logging is off. */
+    private final boolean quiet;
 
     public VerificationRunner(Publisher publisher, Watcher<Temperature> watcher,
                               DeliveryLedger ledger, ConfigurableApplicationContext context,
                               long targetMessages, Duration publishTimeout, Duration drainTimeout,
-                              Duration attachTimeout) {
+                              Duration attachTimeout, boolean quiet) {
         this.publisher = publisher;
         this.watcher = watcher;
         this.ledger = ledger;
@@ -63,6 +65,7 @@ public class VerificationRunner implements ApplicationRunner {
         this.publishTimeout = publishTimeout;
         this.drainTimeout = drainTimeout;
         this.attachTimeout = attachTimeout;
+        this.quiet = quiet;
     }
 
     @Override
@@ -85,6 +88,12 @@ public class VerificationRunner implements ApplicationRunner {
         // batch missing on every run before this wait existed.
         watcher.initiate();
         if (!await(watcher::isAttached, attachTimeout)) {
+            if (quiet) {
+                // Would otherwise be swallowed with the rest of the logging, leaving a bare exit
+                // code 2 and no indication of which of the several inconclusive causes it was.
+                System.out.println("INCONCLUSIVE reason=no_partition_assignment after="
+                        + attachTimeout.toSeconds() + "s");
+            }
             logger.error("Consumer did not receive a partition assignment within {}s - not "
                     + "publishing, because anything sent now would be missed and read as loss.",
                     attachTimeout.toSeconds());
@@ -134,6 +143,18 @@ public class VerificationRunner implements ApplicationRunner {
             case LOSS -> "FAIL - " + s.missing() + " message(s) lost";
             default -> "INCONCLUSIVE - the run did not complete, no verdict claimed";
         };
+        if (quiet) {
+            // Straight to stdout, not the logger: quiet mode turns logging off entirely, so a
+            // logged summary would be suppressed along with everything else. One line, key=value,
+            // so a CI job can grep or parse it without pulling in a JSON tool.
+            System.out.println(String.format(
+                    "%s produced=%d unsent=%d offered=%d received=%d missing=%d pending=%d "
+                            + "duplicates=%d out_of_order=%d foreign=%d exit=%d run=%s",
+                    verdictWord(code), s.produced(), s.unsent(), s.offered(), s.received(),
+                    s.missing(), s.pending(), s.duplicates(), s.outOfOrder(), s.foreign(),
+                    code, s.runId()));
+            return;
+        }
         logger.info("""
                         Verification result: {}
                           run id    {}
@@ -147,6 +168,15 @@ public class VerificationRunner implements ApplicationRunner {
                           exit code {}""",
                 verdict, s.runId(), s.produced(), s.unsent(), s.offered(), s.received(),
                 s.missing(), s.pending(), s.duplicates(), s.outOfOrder(), s.foreign(), code);
+    }
+
+    /** The verdict as a single token, so a caller can match on it without parsing prose. */
+    private static String verdictWord(int code) {
+        return switch (code) {
+            case PASS -> "PASS";
+            case LOSS -> "FAIL";
+            default -> "INCONCLUSIVE";
+        };
     }
 
     /** Polls until the condition holds or the budget runs out; returns whether it held. */

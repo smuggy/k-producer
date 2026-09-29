@@ -371,7 +371,7 @@ The reading measured is identical whether it travels as JSON or Avro — only th
 so a run can be switched without changing what is being tested.
 
 ```shell
---myapp.payload.format=avro --myapp.schemaRegistry.url=http://kafka-00.podspace.internal:8081
+--myapp.payload.format=avro --myapp.schemaRegistry.url=http://schema-registry.podspace.net:8081
 ```
 
 JSON is the default: it needs no registry and is readable straight off the topic with
@@ -418,8 +418,9 @@ new version.
 expects. Registering under the bare topic name is the usual reason a serializer cannot find a
 schema that is plainly visible in the registry UI, so the script applies the suffix itself.
 
-The registry listens inside the VPC, so run this from a host that can reach it — the same
-constraint that applies to the brokers and to `tofu apply`.
+The registry runs on its own host. `schema-registry.podspace.net:8081` is reachable from outside
+the VPC; from inside, use `schema-registry.podspace.internal:8081` — the public name has no
+listener bound internally.
 
 Two schema decisions carry constraints from elsewhere in this document:
 

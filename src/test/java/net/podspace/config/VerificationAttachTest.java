@@ -41,7 +41,7 @@ class VerificationAttachTest {
                 new NeverAttachedReader());
 
         VerificationRunner runner = new VerificationRunner(publisher, watcher, ledger,
-                null, 100, Duration.ofSeconds(5), Duration.ofSeconds(1), Duration.ofMillis(500));
+                null, 100, Duration.ofSeconds(5), Duration.ofSeconds(1), Duration.ofMillis(500), false);
 
         int code = runner.execute();
 

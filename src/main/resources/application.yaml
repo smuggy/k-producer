@@ -71,6 +71,7 @@ myapp:
   # Keeping "lost messages" and "could not reach the brokers" as different codes matters: they
   # call for different responses from whatever is reading the exit status.
   #   java -jar k-producer.jar --myapp.verify.messages=5000
+  # Add --myapp.verify.quiet=true to suppress all logging and print one parseable summary line.
   # verify:
   #   messages: 5000
   #   timeoutSeconds: 120

@@ -259,7 +259,7 @@ public class AppConfig {
         // can see the quit flag. See the blocking-call rule in CLAUDE.md.
         configProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs);
         configProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
-        ProducerFactory<String, byte[]> pf = new DefaultKafkaProducerFactory<String, byte[]>(configProps);
+        ProducerFactory<String, byte[]> pf = new DefaultKafkaProducerFactory<>(configProps);
         pf.addListener(new MicrometerProducerListener<>(this.meterRegistry));
         return pf;
     }
@@ -285,7 +285,7 @@ public class AppConfig {
         configProps.put(
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
                 ByteArrayDeserializer.class.getName());
-        ConsumerFactory<String, byte[]> cf = new DefaultKafkaConsumerFactory<String, byte[]>(configProps);
+        ConsumerFactory<String, byte[]> cf = new DefaultKafkaConsumerFactory<>(configProps);
         cf.addListener(new MicrometerConsumerListener<>(this.meterRegistry));
         return cf;
     }
@@ -450,10 +450,11 @@ public class AppConfig {
             @Value("${myapp.verify.messages}") long targetMessages,
             @Value("${myapp.verify.timeoutSeconds:120}") long timeoutSeconds,
             @Value("${myapp.verify.drainSeconds:30}") long drainSeconds,
-            @Value("${myapp.verify.attachSeconds:30}") long attachSeconds) {
+            @Value("${myapp.verify.attachSeconds:30}") long attachSeconds,
+            @Value("${myapp.verify.quiet:false}") boolean quiet) {
         return new VerificationRunner(publisher, watcher, ledger, context, targetMessages,
                 Duration.ofSeconds(timeoutSeconds), Duration.ofSeconds(drainSeconds),
-                Duration.ofSeconds(attachSeconds));
+                Duration.ofSeconds(attachSeconds), quiet);
     }
 
     @Bean

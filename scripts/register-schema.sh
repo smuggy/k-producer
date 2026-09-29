@@ -13,7 +13,7 @@
 #
 set -euo pipefail
 
-REGISTRY=${SCHEMA_REGISTRY_URL:-http://kafka-00.podspace.internal:8081}
+REGISTRY=${SCHEMA_REGISTRY_URL:-http://schema-registry.podspace.net:8081}
 SCHEMA_FILE="$(dirname "$0")/../src/main/resources/avro/temperature.avsc"
 
 # Confluent's default TopicNameStrategy derives the subject from the topic as "<topic>-value".
@@ -39,7 +39,8 @@ usage() {
     cat <<'EOF'
 
 Options:
-  --registry URL   schema registry base URL (default: $SCHEMA_REGISTRY_URL or kafka-00:8081)
+  --registry URL   schema registry base URL
+                   (default: $SCHEMA_REGISTRY_URL or schema-registry.podspace.net:8081)
   --schema FILE    schema to register (default: src/main/resources/avro/temperature.avsc)
   --topic NAME     register for this topic only; repeatable
   --check          run a compatibility check and stop, registering nothing
@@ -81,8 +82,8 @@ print(json.dumps({'schema': open(sys.argv[1]).read(), 'schemaType': 'AVRO'}))
 reachable() {
     curl --silent --fail --max-time 10 "$REGISTRY/subjects" >/dev/null 2>&1 \
         || die "cannot reach the registry at $REGISTRY
-  It listens inside the VPC only, so this needs to run from a host that can see it -
-  the same constraint that applies to the brokers themselves."
+  The public name resolves but only port 8081 is open; check the security group if this is new.
+  From inside the VPC use http://schema-registry.podspace.internal:8081 instead."
 }
 
 case "$ACTION" in

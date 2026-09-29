@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Configuration status="info">
+<!-- status controls log4j2's OWN diagnostics, which bypass the root logger entirely and so
+     survive logging.level.root=OFF. Substitutable so verification's quiet mode can silence
+     them; the default is unchanged. -->
+<Configuration status="${sys:log4j2.statusLevel:-info}">
+  <!-- The layout file is deliberately NOT called JsonLayout.json: that name collides with a
+       resource inside log4j-layout-template-json, and log4j2 warned "found 2 resources" on
+       every single start-up. Ours won, so nothing was broken, but the warning is emitted
+       before the configuration is read and so cannot be silenced by any status setting. -->
     <Appenders>
         <Console name="console" target="SYSTEM_OUT">
-            <JsonTemplateLayout eventTemplateUri="classpath:JsonLayout.json"/>
+            <JsonTemplateLayout eventTemplateUri="classpath:kproducer-layout.json"/>
 <!--
             <PatternLayout pattern="[%-5level] %d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %c{1} - %msg%n"/>
 -->

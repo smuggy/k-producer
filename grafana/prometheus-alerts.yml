@@ -6,8 +6,8 @@
 # then reload:  curl -X POST http://prometheus.podspace.internal:9090/-/reload
 # Check they parsed:  curl -s .../api/v1/rules | grep k-producer
 #
-# The dashboard's colour thresholds are not alerts - they tint a number on a screen nobody is
-# watching at 3am. These fire whether or not anyone has the dashboard open.
+# The dashboard's color thresholds are not alerts - they tint a number on a screen nobody is
+# watching at 3am. These fire whether anyone has the dashboard open.
 #
 # Severity convention used below:
 #   critical - messages were lost, or the probe is blind. Someone should look now.
