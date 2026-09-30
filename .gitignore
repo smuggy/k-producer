@@ -64,3 +64,4 @@ terraform.rc
 # untracked. terraform/apply-local-net.sh.example carries the invocation without the secret.
 apply-local-net.sh
 
+/external-ca.pem

@@ -41,6 +41,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.*;
 
@@ -142,6 +143,10 @@ public class AppConfig {
     @Autowired
     private MeterRegistry meterRegistry;
 
+    /** Source for the Kafka passthrough settings, read at the moment a client is built. */
+    @Autowired
+    private Environment environment;
+
     /**
      * Fails fast on a role/topic combination that cannot work. The same-topic check matters most:
      * an echo relay pointed at its own inbound topic re-consumes everything it publishes, which is
@@ -239,6 +244,23 @@ public class AppConfig {
         return new KafkaWriter(new KafkaTemplate<>(producerFactory()), writerTopic(), meterRegistry);
     }
 
+    /**
+     * Merges myapp.kafka.properties into a client configuration, last so they take precedence.
+     *
+     * <p>Logged on the way in, with secrets masked: an escape hatch that can override a named
+     * setting needs to be visible, or a passthrough entry quietly beating myapp.kafka.acks becomes
+     * a very long afternoon.
+     */
+    private void applyPassthrough(Map<String, Object> configProps, String clientType) {
+        KafkaPassthroughProperties passthrough = KafkaPassthroughProperties.from(environment);
+        if (passthrough.isEmpty()) {
+            return;
+        }
+        logger.info("Applying {} passthrough properties to the {}: {}",
+                passthrough.getProperties().size(), clientType, passthrough.masked());
+        configProps.putAll(passthrough.getProperties());
+    }
+
     private ProducerFactory<String, byte[]> producerFactory() {
         Map<String, Object> configProps = new HashMap<>();
         logger.debug("Producer factory: bootstrap server: {}", bootstrapAddress);
@@ -259,6 +281,7 @@ public class AppConfig {
         // can see the quit flag. See the blocking-call rule in CLAUDE.md.
         configProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs);
         configProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
+        applyPassthrough(configProps, "producer");
         ProducerFactory<String, byte[]> pf = new DefaultKafkaProducerFactory<>(configProps);
         pf.addListener(new MicrometerProducerListener<>(this.meterRegistry));
         return pf;
@@ -285,6 +308,7 @@ public class AppConfig {
         configProps.put(
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
                 ByteArrayDeserializer.class.getName());
+        applyPassthrough(configProps, "consumer");
         ConsumerFactory<String, byte[]> cf = new DefaultKafkaConsumerFactory<>(configProps);
         cf.addListener(new MicrometerConsumerListener<>(this.meterRegistry));
         return cf;

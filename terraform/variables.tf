@@ -73,3 +73,20 @@ check "insync_below_replication" {
     )
   }
 }
+
+variable "kafka_ca_cert_file" {
+  description = <<-EOT
+    PEM file for the CA that signed the brokers' external certificates.
+
+    Used twice over: the provider trusts the brokers with it, and its contents are written into
+    Consul as ssl.truststore.certificates for the application. One file, so the two cannot drift.
+
+    PEM throughout, never a JKS or PKCS12 truststore - Kafka has accepted PEM since 2.7, and it
+    needs no password and no type declaration to get wrong. Check which CA a file holds with:
+      openssl x509 -in <file> -noout -subject -fingerprint -sha256
+  EOT
+  type        = string
+  # The project-root symlink, so this resolves the same way the application's own
+  # ssl.truststore.location does when Consul is not in use.
+  default = "../external-ca.pem"
+}

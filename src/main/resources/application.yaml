@@ -117,6 +117,38 @@ myapp:
     maxBlockMs: 10000
     # (Outage timing needs no configuration: kproducer.engine.outage records every recovery, and
     # kproducer.engine.outage.current reports an outage still in progress. See RecoveryMetrics.)
+    # Arbitrary client properties, merged verbatim into BOTH the producer and the consumer and
+    # applied last, so they override the named settings above. This is how TLS and SASL are
+    # configured: enumerating every security property here would mean a code change per mechanism,
+    # and this tool exists to probe clusters it does not own.
+    #
+    # Deliberately empty in the bundled file. Trust material is meaningful only in one
+    # environment, and the jar has to start anywhere with no external dependency - so this belongs
+    # in a mounted /config/application.yaml, in Consul, or in environment variables. See the
+    # `ext` prefix in terraform/main.tf for a worked example against the TLS listener.
+    #
+    # Use a PEM certificate rather than a JKS/PKCS12 truststore. Kafka has accepted PEM since 2.7,
+    # and it removes three things that only exist to serve the keystore format: a password that
+    # protects nothing (the file holds public certificates), a `type` that must be stated because
+    # the client assumes JKS while modern keytool writes PKCS12 whatever the extension says, and a
+    # binary blob that cannot live in configuration.
+    #
+    # properties:
+    #   security.protocol: SSL
+    #   ssl.truststore.type: PEM
+    #   ssl.truststore.location: external-ca.pem
+    #
+    # Or inline the certificate, so no file has to reach the machine at all - which is how the
+    # Consul-configured profiles carry it:
+    #
+    # properties:
+    #   security.protocol: SSL
+    #   ssl.truststore.type: PEM
+    #   ssl.truststore.certificates: |
+    #     -----BEGIN CERTIFICATE-----
+    #     ...
+    #     -----END CERTIFICATE-----
+    #
     # Ceiling on how long an accepted record may go unacknowledged before the send is failed.
     # Kafka defaults to 120000, so a record buffered just before an outage takes two minutes to
     # report. Must be at least linger.ms + request.timeout.ms; with Kafka 4 defaults that is
@@ -185,9 +217,14 @@ spring:
       config:
         acl-token: anonymous
         enabled: true
-        # `optional:` on the import covers "no config at that path"; this covers "cannot reach
-        # Consul at all". Both are needed for the app to run in an environment without Consul -
-        # it falls back to the configuration bundled in the jar and logs a warning.
+        # Has no effect while the import above carries `optional:`. That prefix swallows every
+        # config-data failure, an unreachable server included, and it does so before this is
+        # consulted - setting `fail-fast: true` here does not change the outcome, as a run against
+        # an untrusted Consul endpoint confirms: the application starts on the configuration
+        # bundled in this file either way, and logs a warning. Dropping `optional:` is what makes
+        # the failure fatal, which is what the `ext` profile at the end of this file does. Kept
+        # explicit here because tolerating a missing Consul is the intended behaviour for these
+        # profiles, and this states it.
         fail-fast: false
         # This context really is a single `data` key holding a YAML document
         # (config/k-producer,test/data), so YAML is correct here. Note the consul/ext/other
@@ -237,9 +274,14 @@ spring:
       config:
         acl-token: anonymous
         enabled: true
-        # `optional:` on the import covers "no config at that path"; this covers "cannot reach
-        # Consul at all". Both are needed for the app to run in an environment without Consul -
-        # it falls back to the configuration bundled in the jar and logs a warning.
+        # Has no effect while the import above carries `optional:`. That prefix swallows every
+        # config-data failure, an unreachable server included, and it does so before this is
+        # consulted - setting `fail-fast: true` here does not change the outcome, as a run against
+        # an untrusted Consul endpoint confirms: the application starts on the configuration
+        # bundled in this file either way, and logs a warning. Dropping `optional:` is what makes
+        # the failure fatal, which is what the `ext` profile at the end of this file does. Kept
+        # explicit here because tolerating a missing Consul is the intended behaviour for these
+        # profiles, and this states it.
         fail-fast: false
       discovery:
         # See the note in the test profile: registration failure is its own fail-fast switch.
@@ -249,3 +291,40 @@ spring:
         health-check-url: http://app.podspace.internal:${server.port}/actuator/health
         metadata:
           metrics-path: /actuator/prometheus
+
+---
+# The `ext` profile selects the Consul prefix for the EXTERNAL listener on 9094 - TLS, public
+# podspace.net broker names (see terraform/main.tf). It carries no connection details of its own and
+# is always combined with a profile that supplies them: `SPRING_PROFILES_ACTIVE=consul,ext`. This
+# document is last in the file so that, with both active, the setting below wins over the `consul`
+# profile's `fail-fast: false`.
+#
+# Unlike `dev` or `test`, this profile has no useful degraded mode. When the configuration cannot be
+# read, the application falls back to the values bundled in this file - `localhost:9092`, PLAINTEXT -
+# so a probe started to measure a TLS cluster instead measures a broker that is not under test, and
+# reports a healthy run while doing it. Refusing to start is strictly more useful than a confident
+# answer about the wrong cluster. Check the `bootstrap.servers` line logged at start-up to tell the
+# two apart.
+#
+# The usual cause is the JVM not trusting the Consul endpoint's private CA, which surfaces as
+# `PKIX path building failed`; see "Trusting the Consul endpoint itself" in README.md.
+#
+# Deliberately scoped to config only. `discovery.fail-fast` stays false: failing to register with
+# Consul costs the instance its service entry, but it does not change what is being measured.
+spring:
+  config:
+    # NOT `optional:`, unlike every other profile here - and that prefix, not `fail-fast`, is what
+    # decides this. `optional:` swallows an unreachable Consul just as readily as an empty path, and
+    # it does so before `fail-fast` is ever consulted: with `optional:` present the application
+    # starts on the bundled defaults even with `fail-fast: true` set on the command line. Bare
+    # `consul:` takes its host and port from `spring.cloud.consul.*` below, so this composes with
+    # whichever profile supplies the connection rather than pinning one here.
+    import: "consul:"
+    activate:
+      on-profile: ext
+  cloud:
+    consul:
+      config:
+        # Belt and braces. The import above is what actually enforces this today; this covers the
+        # case of someone reintroducing `optional:` without realising what it turns off.
+        fail-fast: true

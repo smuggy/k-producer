@@ -12,13 +12,13 @@
 #   datacenter = "local-net-1"
 # }
 
-provider consul {
-  address    = "prometheus.podspace.net:443"
+provider "consul" {
+  address = "prometheus.podspace.net:443"
   header {
     name  = "X-Consul-Prefix"
     value = "/consul"
   }
-  scheme     = "https"
+  scheme = "https"
   # token = "----"
   datacenter = "us-east-2"
 }
@@ -39,8 +39,8 @@ terraform {
 provider "kafka" {
   bootstrap_servers = var.kafka_bootstrap_servers
 
-  # The brokers listen PLAINTEXT on 9092. If a TLS or SASL listener is ever added, this and the
-  # matching credentials have to change together - and so does myapp.kafka configuration in the
-  # application, which currently has no passthrough for security properties.
-  tls_enabled = false
+  # The external listener on 9094 is TLS. The CA is private, so it has to be supplied explicitly -
+  # the provider will not fall back to the system trust store for an unknown issuer.
+  tls_enabled = true
+  ca_cert     = file(var.kafka_ca_cert_file)
 }

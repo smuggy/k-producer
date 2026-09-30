@@ -398,6 +398,87 @@ U+FFFD — measured at 89 bytes in, 95 bytes out, irreversibly. A String-based t
 corrupt every Avro message. It also means the relay forwards a payload it never has to interpret,
 which is what preserves the originating timestamp that end-to-end latency is measured against.
 
+## Connecting to a TLS cluster
+
+Security settings are not modelled one at a time — `myapp.kafka.properties` is passed through
+verbatim to both the producer and the consumer, so TLS, SASL and anything else the client supports
+work without a code change:
+
+```yaml
+myapp:
+  kafka:
+    bootstrapAddress: kafka-00.podspace.net:9094,kafka-01.podspace.net:9094,kafka-02.podspace.net:9094
+    properties:
+      security.protocol: SSL
+      ssl.truststore.type: PEM
+      ssl.truststore.location: external-ca.pem
+```
+
+**Use a PEM certificate, not a JKS or PKCS12 truststore.** Kafka has accepted PEM since 2.7, and
+three problems disappear with the keystore format:
+
+* **No password.** A truststore holds public certificates; its password guards file integrity, not
+  a secret, so it is one more thing to carry for no benefit.
+* **No type to get wrong.** The client defaults `ssl.truststore.type` to `JKS`, while modern
+  `keytool` writes PKCS12 regardless of the file extension. A `.jks` file that is really PKCS12
+  fails the handshake with nothing useful in the log.
+* **It fits in configuration.** A PEM is text, so the certificate itself can live in Consul rather
+  than a path to a file that must exist on every machine — see below.
+
+These properties are applied **last** and therefore override the named settings above them. That is
+deliberate for an escape hatch, but it means `myapp.kafka.properties.acks` quietly beats
+`myapp.kafka.acks`. The effective values are logged at start-up, with anything whose key contains
+`password`, `secret`, `jaas` or `key` masked.
+
+### Carrying the certificate in Consul
+
+`ssl.truststore.certificates` takes the PEM inline, so nothing has to reach the filesystem — a
+container needs no volume mount for trust material. The `ext` prefix in `terraform/main.tf` does
+this, writing the certificate straight into Consul KV:
+
+```hcl
+"myapp/kafka/properties/ssl.truststore.type"         = "PEM"
+"myapp/kafka/properties/ssl.truststore.certificates" = file(var.kafka_ca_cert_file)
+```
+
+That is safe only because a CA certificate is public. Mutual TLS is different: a client **key** is
+a real credential and belongs in a Kubernetes Secret or an environment variable, never in KV that
+an `anonymous` token can read.
+
+### Trusting the Consul endpoint itself
+
+Everything above concerns the *Kafka* connection, whose trust is configured per client. Reaching
+Consul over HTTPS is a second, independent leg, and it uses the **JVM's** trust store rather than
+Kafka's — so configuring one does nothing for the other.
+
+This catches people out because Java does not consult the operating system's trust store. It reads
+`$JAVA_HOME/lib/security/cacerts`, which ships with public CAs only. A private CA that the host
+already trusts — one `curl` accepts without complaint — is invisible to the JVM.
+
+The symptom is indirect. The handshake fails with `PKIX path building failed`, which is logged at
+`WARN`, and then `spring.cloud.consul.config.fail-fast: false` does what it was asked to do: the
+application falls back to the configuration bundled in the jar and carries on. A probe started for
+a TLS cluster on port 9094 ends up measuring `localhost:9092` in plaintext, and the run *looks*
+healthy. **Check the `bootstrap.servers` line logged at start-up** — it is the quickest way to tell
+a real run from a fallback.
+
+On macOS, point the JVM at the keychain instead of shipping a certificate around:
+
+```shell
+java -Djavax.net.ssl.trustStoreType=KeychainStore -jar build/libs/k-producer-<version>.jar
+```
+
+Everywhere else — and in the container, which has no keychain — `src/main/docker/run.sh` builds a
+PKCS12 truststore from every `*.pem` or `*.crt` found in `CONSUL_CA_DIR` (default
+`/etc/ssl/consul-ca`), seeded from the JVM's own `cacerts` so that public CAs keep working. This is
+the one place a PKCS12 is still required: JSSE cannot load a PEM, which is exactly the limitation
+the Kafka client does not have.
+
+Which CA to mount depends on the endpoint, not on the application: the external
+`prometheus.podspace.net` is signed by the same CA as the brokers (`external-ca.pem`), while the
+in-VPC `consul.ps.internal` is signed by the internal one — the certificate the `consul-ca`
+ConfigMap carries in `deploy/`.
+
 ## Registering the message schema
 
 `src/main/resources/avro/temperature.avsc` defines the message as an Avro record, field-for-field
